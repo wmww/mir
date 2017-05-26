@@ -1,3 +1,22 @@
+mir (0.26.3-0ubuntu1) UNRELEASED; urgency=medium
+
+  * New upstream release 0.26.3 (https://launchpad.net/mir/+milestone/0.26.3)
+    - Enhancements:
+      . Make deprecations optional (and default to off for builds on 16.04 LTS)
+      . Added support for building on Ubuntu 17.10 artful.
+    - Bugs fixed:
+      . Mir needs to be updated to 0.26 in 16.04LTS (LP: #1685186)
+      . unity-system-compositor crashed with SIGSEGV in
+        libinput_device_config_accel_is_available() from
+        libinput_device_config_accel_set_speed() from
+        mir::input::evdev::LibInputDevice::apply_settings() (LP: #1672955)
+      . Please transition to Boost 1.62 (LP: #1675138)
+      . Mir sending key repeat events continually to nested shell after VT
+        switch (causes Unity8 lockup for a while) (LP: #1675357)
+      . mir_demo_standalone_render_overlays fails to link (LP: #1677239)
+
+ -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Thu, 30 Mar 2017 11:43:28 +0800
+
 mir (0.26.2+17.04.20170322.1-0ubuntu2) zesty; urgency=medium
 
   [ Mattia Rizzolo ]
