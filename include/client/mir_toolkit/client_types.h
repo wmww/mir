@@ -54,8 +54,7 @@ typedef struct MirDisplayConfig MirDisplayConfig;
 typedef struct MirError MirError;
 typedef struct MirPresentationChain MirPresentationChain;
 typedef struct MirBuffer MirBuffer;
-typedef struct MirRenderSurface MirRenderSurface
-MIR_FOR_REMOVAL_IN_VERSION_1("This type is slated for rename due to MirRenderSurface-->MirSurface transition");
+typedef struct MirRenderSurface MirRenderSurface;
 
 /**
  * Descriptor for an output connection.
@@ -202,7 +201,7 @@ typedef struct MirSurfaceParameters
      * use the value mir_display_output_id_invalid.
      */
     uint32_t output_id;
-} MirSurfaceParameters MIR_FOR_REMOVAL_IN_VERSION_1("Use MirWindowParameters instead");
+} MirSurfaceParameters MIR_FOR_REMOVAL_IN_VERSION_1("Use mir_window_get apis or listen for attribute events instead");
 
 enum { mir_platform_package_max = 32 };
 
@@ -555,9 +554,6 @@ MIR_FOR_REMOVAL_IN_VERSION_1("Use MirWindowEventCallback instead");
 typedef void (*mir_surface_id_callback)(
     MirSurface* surface, MirPersistentId* id, void* context)
 MIR_FOR_REMOVAL_IN_VERSION_1("Use MirWindowIdCallback instead");
-
-typedef void (*MirRenderSurfaceCallback)(MirRenderSurface*, void* context)
-MIR_FOR_REMOVAL_IN_VERSION_1("This type is slated for rename due to MirRenderSurface-->MirSurface transition");
 
 typedef MirSurfaceParameters MirWindowParameters;
 
