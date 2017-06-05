@@ -19,7 +19,8 @@
 #include "src/client/connection_surface_map.h"
 #include "src/client/mir_surface.h"
 #include "src/client/presentation_chain.h"
-#include "mir/test/doubles/mock_client_buffer_stream.h"
+#include "src/client/render_surface.h"
+#include "mir/test/doubles/mock_mir_buffer_stream.h"
 #include "mir/test/doubles/mock_protobuf_server.h"
 #include <gtest/gtest.h>
 
@@ -29,38 +30,38 @@ namespace mtd = mir::test::doubles;
 
 namespace
 {
-void buffer_cb(MirPresentationChain*, MirBuffer*, void*)
+void buffer_cb(MirBuffer*, void*)
 {
 }
 }
 struct ConnectionResourceMap : testing::Test
 {
     std::shared_ptr<MirWaitHandle> wh { std::make_shared<MirWaitHandle>() };
-    std::shared_ptr<MirSurface> surface{std::make_shared<MirSurface>("a string", nullptr, mf::SurfaceId{2}, wh)};
-    std::shared_ptr<mcl::ClientBufferStream> stream{ std::make_shared<mtd::MockClientBufferStream>() }; 
+    std::shared_ptr<MirWindow> surface{std::make_shared<MirWindow>("a string", nullptr, mf::SurfaceId{2}, wh)};
+    std::shared_ptr<MirBufferStream> stream{ std::make_shared<mtd::MockMirBufferStream>() }; 
     std::shared_ptr<mcl::Buffer> buffer {
         std::make_shared<mcl::Buffer>(buffer_cb, nullptr, 0, nullptr, nullptr, mir_buffer_usage_software) };
     mtd::MockProtobufServer mock_server;
     std::shared_ptr<mcl::PresentationChain> chain{ std::make_shared<mcl::PresentationChain>(
         nullptr, 0, mock_server, nullptr, nullptr) };
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+    std::shared_ptr<MirRenderSurface> render_surface { std::make_shared<mcl::RenderSurface>(
+        nullptr, nullptr, nullptr, nullptr, mir::geometry::Size{0, 0}) };
+#pragma GCC diagnostic pop
 
     mf::SurfaceId const surface_id{43};
     mf::BufferStreamId const stream_id{43};
     int const buffer_id{43};
+    int void_ptr{0};
 };
 
 TEST_F(ConnectionResourceMap, maps_surface_when_surface_inserted)
 {
     using namespace testing;
-    auto surface_called = false;
     mcl::ConnectionSurfaceMap map;
     map.insert(surface_id, surface);
-    map.with_surface_do(surface_id, [&](MirSurface* surf) {
-        EXPECT_THAT(surf, Eq(surface.get()));
-        surface_called = true;
-    });
-
-    EXPECT_TRUE(surface_called);
+    EXPECT_EQ(surface, map.surface(surface_id));
 }
 
 TEST_F(ConnectionResourceMap, removes_surface_when_surface_removed)
@@ -69,46 +70,67 @@ TEST_F(ConnectionResourceMap, removes_surface_when_surface_removed)
     mcl::ConnectionSurfaceMap map;
     map.insert(surface_id, surface);
     map.erase(surface_id);
-    EXPECT_THROW({
-        map.with_stream_do(stream_id, [](mcl::BufferReceiver*){});
-    }, std::runtime_error);
+    EXPECT_FALSE(map.stream(stream_id));
 }
 
 TEST_F(ConnectionResourceMap, maps_streams)
 {
     using namespace testing;
-    auto stream_called = false;
     mcl::ConnectionSurfaceMap map;
     map.insert(stream_id, stream);
-    map.with_stream_do(stream_id, [&](mcl::BufferReceiver* str) {
-        EXPECT_THAT(str, Eq(stream.get()));
-        stream_called = true;
-    });
-    EXPECT_TRUE(stream_called);
+    EXPECT_EQ(stream, map.stream(stream_id));
     map.erase(stream_id);
 }
 
-TEST_F(ConnectionResourceMap, maps_chains)
+TEST_F(ConnectionResourceMap, holds_chain_reference)
 {
     using namespace testing;
-    auto chain_called = false;
     mcl::ConnectionSurfaceMap map;
+    auto use_count = chain.use_count();
     map.insert(stream_id, chain);
-    map.with_stream_do(stream_id, [&](mcl::BufferReceiver* str) {
-        EXPECT_THAT(str, Eq(chain.get()));
-        chain_called = true;
-    });
-    EXPECT_TRUE(chain_called);
+    EXPECT_THAT(chain.use_count(), Gt(use_count));
     map.erase(stream_id);
+    EXPECT_THAT(chain.use_count(), Eq(use_count));
 }
 
 TEST_F(ConnectionResourceMap, maps_buffers)
 {
     using namespace testing;
     mcl::ConnectionSurfaceMap map;
-    EXPECT_THAT(map.buffer(buffer_id), Eq(nullptr));
+    EXPECT_THROW({
+        map.buffer(buffer_id);
+    }, std::runtime_error);
+
     map.insert(buffer_id, buffer);
     EXPECT_THAT(map.buffer(buffer_id), Eq(buffer));
     map.erase(buffer_id);
-    EXPECT_THAT(map.buffer(buffer_id), Eq(nullptr));
+
+    EXPECT_THROW({
+        map.buffer(buffer_id);
+    }, std::runtime_error);
+}
+
+TEST_F(ConnectionResourceMap, can_access_buffers_from_surface)
+{
+    using namespace testing;
+    mcl::ConnectionSurfaceMap map;
+    map.insert(buffer_id, buffer);
+    map.insert(surface_id, surface);
+    EXPECT_EQ(buffer, map.buffer(buffer_id));
+}
+
+TEST_F(ConnectionResourceMap, can_insert_retrieve_erase_render_surface)
+{
+    using namespace testing;
+    mcl::ConnectionSurfaceMap map;
+
+    map.insert(&void_ptr, render_surface);
+    auto rs = map.render_surface(&void_ptr);
+    map.erase(&void_ptr);
+
+    Sequence seq;
+    EXPECT_THAT(rs.get(), Eq(render_surface.get()));
+    EXPECT_THROW({
+        map.render_surface(&void_ptr);
+    }, std::runtime_error);
 }

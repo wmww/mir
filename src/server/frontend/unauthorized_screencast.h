@@ -30,11 +30,14 @@ class UnauthorizedScreencast : public Screencast
 {
 public:
     ScreencastSessionId create_session(
-        geometry::Rectangle const& region,
-        geometry::Size const& size,
-        MirPixelFormat pixel_format) override;
+        mir::geometry::Rectangle const& region,
+        mir::geometry::Size const& size,
+        MirPixelFormat pixel_format,
+        int nbuffers,
+        MirMirrorMode mirror_mode) override;
     void destroy_session(frontend::ScreencastSessionId id) override;
     std::shared_ptr<graphics::Buffer> capture(frontend::ScreencastSessionId id) override;
+    void capture(ScreencastSessionId id, std::shared_ptr<graphics::Buffer> const& buffer) override;
 };
 
 }

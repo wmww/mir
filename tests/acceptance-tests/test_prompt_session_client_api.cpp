@@ -30,7 +30,6 @@
 #include "mir/test/doubles/mock_prompt_session_listener.h"
 #include "mir_test_framework/executable_path.h"
 #include "mir_test_framework/headless_in_process_server.h"
-#include "mir_test_framework/using_stub_client_platform.h"
 #include "mir/test/popen.h"
 
 #include <gtest/gtest.h>
@@ -50,6 +49,14 @@ using namespace testing;
 
 namespace
 {
+char const* fd_connect_string(int fd)
+{
+    static char client_connect_string[32] = {0};
+
+    sprintf(client_connect_string, "fd://%d", fd);
+    return client_connect_string;
+}
+
 struct MockSessionAuthorizer : public mtd::StubSessionAuthorizer
 {
     MockSessionAuthorizer()
@@ -99,7 +106,6 @@ struct PromptSessionClientAPI : mtf::HeadlessInProcessServer
     MirConnection* application_connection{nullptr};
 
     std::shared_ptr<ms::PromptSession> server_prompt_session;
-    mtf::UsingStubClientPlatform using_stub_client_platform;
 
     mir::CachedPtr<mtd::MockPromptSessionListener> mock_prompt_session_listener;
     mir::CachedPtr<MockSessionAuthorizer> mock_prompt_session_authorizer;
@@ -221,14 +227,6 @@ struct PromptSessionClientAPI : mtf::HeadlessInProcessServer
         return cv.wait_for(lock, timeout, [this]{ return called_back; });
     }
 
-    char const* fd_connect_string(int fd)
-    {
-        static char client_connect_string[32] = {0};
-
-        sprintf(client_connect_string, "fd://%d", fd);
-        return client_connect_string;
-    }
-
     MOCK_METHOD1(process_line, void(std::string const&));
 
     std::vector<std::shared_ptr<mf::Session>> list_providers_for(
@@ -255,7 +253,7 @@ struct PromptSessionClientAPI : mtf::HeadlessInProcessServer
 
 constexpr pid_t PromptSessionClientAPI::application_session_pid;
 
-mir_prompt_session_state_change_callback const null_state_change_callback{nullptr};
+MirPromptSessionStateChangeCallback const null_state_change_callback{nullptr};
 constexpr char const* const PromptSessionClientAPI::provider_name[];
 
 extern "C" void prompt_session_state_change_callback(
@@ -268,15 +266,28 @@ extern "C" void prompt_session_state_change_callback(
     self->prompt_session_state_change_callback_called.store(true);
 }
 
+template<typename T>
+auto to_mir_fds(T* raw_fds, size_t count)
+{
+    std::vector<mir::Fd> fds;
+    for (size_t i = 0; i != count; ++i)
+        fds.push_back(mir::Fd{raw_fds[i]});
+    return fds;
+}
+
+template<typename T>
+auto to_mir_fds(T const& raw_fds)
+{
+    return to_mir_fds(raw_fds.data(), raw_fds.size());
+}
+
 void client_fd_callback(MirPromptSession*, size_t count, int const* fds, void* context)
 {
     auto const self = static_cast<PromptSessionClientAPI*>(context);
 
     std::unique_lock<decltype(self->mutex)> lock(self->mutex);
 
-    self->actual_fds.clear();
-    for (size_t i = 0; i != count; ++i)
-        self->actual_fds.push_back(mir::Fd{fds[i]});
+    self->actual_fds = to_mir_fds(fds, count);
 
     self->called_back = true;
     self->cv.notify_one();
@@ -284,8 +295,14 @@ void client_fd_callback(MirPromptSession*, size_t count, int const* fds, void* c
 
 struct DummyPromptProvider
 {
-    DummyPromptProvider(char const* connect_string, char const* app_name) :
-        connection{mir_connect_sync(connect_string, app_name)}
+    DummyPromptProvider(mir::Fd&& fd, char const* app_name) :
+        /* mir_connect_sync will take ownership of the fd, and close it as a part of
+         * mir_connection_release.
+         *
+         * There's no escape hatch for mir::Fd (nor can we safely add one),
+         * so dup() the file descriptor first.
+         */
+        connection{mir_connect_sync(fd_connect_string(dup(fd)), app_name)}
     {
         EXPECT_THAT(connection, NotNull());
     }
@@ -349,13 +366,36 @@ TEST_F(PromptSessionClientAPI, can_get_fds_for_prompt_providers)
     MirPromptSession* prompt_session = mir_connection_create_prompt_session_sync(
         connection, application_session_pid, null_state_change_callback, this);
 
-    static std::size_t const arbritary_fd_request_count = 3;
+    std::size_t const arbritary_fd_request_count = 3;
 
     mir_prompt_session_new_fds_for_prompt_providers(
         prompt_session, arbritary_fd_request_count, &client_fd_callback, this);
 
     EXPECT_TRUE(wait_for_callback(std::chrono::milliseconds(500)));
     EXPECT_THAT(actual_fds.size(), Eq(arbritary_fd_request_count));
+
+    for (auto const& fd : actual_fds)
+        EXPECT_THAT(fd, Gt(0));
+
+    mir_prompt_session_release_sync(prompt_session);
+}
+
+TEST_F(PromptSessionClientAPI, can_get_fds_for_prompt_providers_sync)
+{
+    connection = mir_connect_sync(new_connection().c_str(), __PRETTY_FUNCTION__);
+
+    MirPromptSession* prompt_session = mir_connection_create_prompt_session_sync(
+            connection, application_session_pid, null_state_change_callback, this);
+
+    std::size_t const arbritary_fd_request_count = 3;
+    std::array<int, arbritary_fd_request_count> fds;
+    auto actual_fd_count = mir_prompt_session_new_fds_for_prompt_providers_sync(
+            prompt_session, arbritary_fd_request_count, fds.data());
+
+    auto mir_fds = to_mir_fds(fds);
+    EXPECT_THAT(actual_fd_count, Eq(arbritary_fd_request_count));
+    for (auto const& fd : mir_fds)
+        EXPECT_THAT(fd, Gt(0));
 
     mir_prompt_session_release_sync(prompt_session);
 }
@@ -378,12 +418,12 @@ TEST_F(PromptSessionClientAPI,
     EXPECT_CALL(*the_mock_prompt_session_listener(),
         prompt_provider_added(_, IsSessionWithPid(expected_pid)));
 
-    DummyPromptProvider{fd_connect_string(actual_fds[0]), __PRETTY_FUNCTION__};
+    DummyPromptProvider{std::move(actual_fds[0]), __PRETTY_FUNCTION__};
 
     mir_prompt_session_release_sync(prompt_session);
 }
 
-TEST_F(PromptSessionClientAPI, DISABLED_client_pid_is_associated_with_session)
+TEST_F(PromptSessionClientAPI, client_pid_is_associated_with_session)
 {
     connection = mir_connect_sync(new_connection().c_str(), __PRETTY_FUNCTION__);
 
@@ -401,8 +441,8 @@ TEST_F(PromptSessionClientAPI, DISABLED_client_pid_is_associated_with_session)
     InSequence seq;
     EXPECT_CALL(*this, process_line(StrEq("Starting")));
     EXPECT_CALL(*this, process_line(StrEq("Connected")));
-    EXPECT_CALL(*this, process_line(StrEq("Surface created")));
-    EXPECT_CALL(*this, process_line(StrEq("Surface released")));
+    EXPECT_CALL(*this, process_line(StrEq("Window created")));
+    EXPECT_CALL(*this, process_line(StrEq("Window released")));
     EXPECT_CALL(*this, process_line(StrEq("Connection released")));
 
     auto const command = mtf::executable_path() + "/mir_demo_client_basic -m" + fd_connect_string(actual_fds[0]);
@@ -475,8 +515,11 @@ TEST_F(PromptSessionClientAPI, after_server_closes_prompt_session_api_isnt_broke
 
     the_prompt_session_manager()->stop_prompt_session(server_prompt_session);
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     mir_wait_for(mir_prompt_session_new_fds_for_prompt_providers(
         prompt_session, no_of_prompt_providers, &client_fd_callback, this));
+#pragma GCC diagnostic pop
 
     mir_prompt_session_release_sync(prompt_session);
 }
@@ -521,11 +564,14 @@ TEST_F(PromptSessionClientAPI, server_retrieves_child_provider_sessions)
     MirPromptSession* prompt_session = mir_connection_create_prompt_session_sync(
         connection, application_session_pid, null_state_change_callback, this);
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     mir_wait_for(mir_prompt_session_new_fds_for_prompt_providers(
         prompt_session, no_of_prompt_providers, &client_fd_callback, this));
+#pragma GCC diagnostic pop
 
-    DummyPromptProvider provider1{fd_connect_string(actual_fds[0]), provider_name[0]};
-    DummyPromptProvider provider2{fd_connect_string(actual_fds[1]), provider_name[1]};
+    DummyPromptProvider provider1{std::move(actual_fds[0]), provider_name[0]};
+    DummyPromptProvider provider2{std::move(actual_fds[1]), provider_name[1]};
 
     EXPECT_THAT(list_providers_for(server_prompt_session), ElementsAre(
         SessionWithName(provider_name[0]), SessionWithName(provider_name[1])));
@@ -586,11 +632,14 @@ TEST_F(PromptSessionClientAPI,
     MirPromptSession* prompt_session = mir_connection_create_prompt_session_sync(
         connection, application_session_pid, null_state_change_callback, this);
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     mir_wait_for(mir_prompt_session_new_fds_for_prompt_providers(
         prompt_session, no_of_prompt_providers, &client_fd_callback, this));
+#pragma GCC diagnostic pop
 
-    DummyPromptProvider provider1{fd_connect_string(actual_fds[0]), provider_name[0]};
-    DummyPromptProvider provider2{fd_connect_string(actual_fds[1]), provider_name[1]};
+    DummyPromptProvider provider1{std::move(actual_fds[0]), provider_name[0]};
+    DummyPromptProvider provider2{std::move(actual_fds[1]), provider_name[1]};
 
     mir_prompt_session_release_sync(prompt_session);
 }
@@ -612,6 +661,41 @@ TEST_F(PromptSessionClientAPI, when_application_pid_is_invalid_starting_a_prompt
     mir_prompt_session_release_sync(prompt_session);
 }
 
+TEST_F(PromptSessionClientAPI, can_start_and_stop_multiple_prompt_sessions)
+{
+    const int sessions = 10;
+
+    connection = mir_connect_sync(new_connection().c_str(), "Prompt session helper");
+
+    MirPromptSession* prompt_sessions[sessions] = {nullptr };
+
+    for (auto& prompt_session : prompt_sessions)
+    {
+        prompt_session = mir_connection_create_prompt_session_sync(
+            connection, application_session_pid, null_state_change_callback, this);
+
+        ASSERT_THAT(prompt_session, Ne(nullptr));
+    }
+
+    for (auto& prompt_session : prompt_sessions)
+    {
+        EXPECT_THAT(mir_prompt_session_is_valid(prompt_session), Eq(true));
+        EXPECT_THAT(mir_prompt_session_error_message(prompt_session), StrEq(""));
+
+        mir_prompt_session_new_fds_for_prompt_providers(
+            prompt_session, 1, &client_fd_callback, this);
+
+        ASSERT_TRUE(wait_for_callback(std::chrono::milliseconds(500)));
+
+        DummyPromptProvider{std::move(actual_fds[0]), "Prompt session provider"};
+    }
+
+    for (auto& prompt_session : prompt_sessions)
+    {
+        mir_prompt_session_release_sync(prompt_session);
+    }
+}
+
 // Test canary for kernel regression (also compiles as a standalone C test)
 #include <stdlib.h>
 #include <stdio.h>
@@ -624,7 +708,7 @@ TEST_F(PromptSessionClientAPI, when_application_pid_is_invalid_starting_a_prompt
 #ifndef TEST
 int main()
 #else
-TEST(LP, DISABLED_1540731)
+TEST(LP, 1540731)
 #endif
 {
     enum { server, client, size };

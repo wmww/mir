@@ -28,7 +28,7 @@ namespace test
 namespace doubles
 {
 
-struct StubSession : scene::Session
+struct StubSession : scene::Session, frontend::SessionExtensions
 {
     StubSession(pid_t pid = -1);
 
@@ -37,7 +37,7 @@ struct StubSession : scene::Session
 
     std::string name() const override;
 
-    void force_requests_to_complete() override;
+    void drop_outstanding_requests() override;
 
     pid_t process_id() const override;
 
@@ -48,6 +48,8 @@ struct StubSession : scene::Session
     void set_lifecycle_state(MirLifecycleState state) override;
 
     void send_display_config(graphics::DisplayConfiguration const&) override;
+
+    void send_error(ClientVisibleError const&) override;
 
     void hide() override;
 
@@ -78,6 +80,8 @@ struct StubSession : scene::Session
 
     frontend::BufferStreamId create_buffer_stream(
         graphics::BufferProperties const& props) override;
+    graphics::BufferID create_buffer(geometry::Size, uint32_t, uint32_t) override;
+    graphics::BufferID create_buffer(geometry::Size, MirPixelFormat) override;
 
     void destroy_buffer_stream(frontend::BufferStreamId stream) override;
 
@@ -87,7 +91,11 @@ struct StubSession : scene::Session
 
     void destroy_surface(std::weak_ptr<scene::Surface> const& surface) override;
 
-    void send_input_device_change(std::vector<std::shared_ptr<input::Device>> const& devices) override;
+    void send_input_config(MirInputConfig const& config) override;
+
+    graphics::BufferID create_buffer(graphics::BufferProperties const& properties) override;
+    void destroy_buffer(graphics::BufferID) override;
+    std::shared_ptr<graphics::Buffer> get_buffer(graphics::BufferID) override;
 
     pid_t pid;
 };

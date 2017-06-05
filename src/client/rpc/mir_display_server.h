@@ -51,10 +51,6 @@ public:
         mir::protobuf::SurfaceModifications const* request,
         mir::protobuf::Void* response,
         google::protobuf::Closure* done) override;
-    void next_buffer(
-        mir::protobuf::SurfaceId const* request,
-        mir::protobuf::Buffer* response,
-        google::protobuf::Closure* done) override;
     void release_surface(
         mir::protobuf::SurfaceId const* request,
         mir::protobuf::Void* response,
@@ -71,8 +67,24 @@ public:
         mir::protobuf::DisplayConfiguration const* request,
         mir::protobuf::DisplayConfiguration* response,
         google::protobuf::Closure* done) override;
+    void remove_session_configuration(
+        mir::protobuf::Void const* request,
+        mir::protobuf::Void* response,
+        google::protobuf::Closure* done) override;
     void set_base_display_configuration(
         mir::protobuf::DisplayConfiguration const* request,
+        mir::protobuf::Void* response,
+        google::protobuf::Closure* done) override;
+    void preview_base_display_configuration(
+        mir::protobuf::PreviewConfiguration const* request,
+        mir::protobuf::Void* response,
+        google::protobuf::Closure* done) override;
+    void confirm_base_display_configuration(
+        mir::protobuf::DisplayConfiguration const* request,
+        mir::protobuf::Void* response,
+        google::protobuf::Closure* done) override;
+    void cancel_base_display_configuration_preview(
+        mir::protobuf::Void const* request,
         mir::protobuf::Void* response,
         google::protobuf::Closure* done) override;
     void create_screencast(
@@ -82,6 +94,10 @@ public:
     void screencast_buffer(
         mir::protobuf::ScreencastId const* request,
         mir::protobuf::Buffer* response,
+        google::protobuf::Closure* done) override;
+    void screencast_to_buffer(
+        mir::protobuf::ScreencastRequest const* request,
+        mir::protobuf::Void* response,
         google::protobuf::Closure* done) override;
     void release_screencast(
         mir::protobuf::ScreencastId const* request,
@@ -105,15 +121,11 @@ public:
         google::protobuf::Closure* done) override;
     void start_prompt_session(
         mir::protobuf::PromptSessionParameters const* request,
-        mir::protobuf::Void* response,
+        mir::protobuf::PromptSession* response,
         google::protobuf::Closure* done) override;
     void stop_prompt_session(
-        mir::protobuf::Void const* request,
+        mir::protobuf::PromptSession const* request,
         mir::protobuf::Void* response,
-        google::protobuf::Closure* done) override;
-    void exchange_buffer(
-        mir::protobuf::BufferRequest const* request,
-        mir::protobuf::Buffer* response,
         google::protobuf::Closure* done) override;
     void submit_buffer(
         mir::protobuf::BufferRequest const* request,

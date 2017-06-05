@@ -17,14 +17,16 @@
  */
 
 #include "mir/events/event_private.h"
+#include "mir/events/event_builders.h"
 
-#include "src/server/input/android/android_input_channel.h"
+#include "src/server/input/channel.h"
 #include "src/server/input/android/input_sender.h"
 #include "src/server/input/default_event_builder.h"
 #include "src/server/report/null_report_factory.h"
 
 #include "mir/test/doubles/stub_scene_surface.h"
 #include "mir/test/doubles/mock_input_surface.h"
+#include "mir/test/doubles/mock_input_seat.h"
 #include "mir/test/doubles/stub_scene.h"
 #include "mir/test/doubles/mock_scene.h"
 #include "mir/test/doubles/triggered_main_loop.h"
@@ -44,7 +46,6 @@
 
 #include <boost/exception/all.hpp>
 
-//#include <algorithm>
 #include <cstring>
 
 namespace mi = mir::input;
@@ -55,7 +56,7 @@ namespace mr = mir::report;
 namespace mtd = mt::doubles;
 namespace droidinput = android;
 
-using testing::_;
+using namespace testing;
 
 namespace
 {
@@ -65,6 +66,7 @@ class MockInputEventFactory : public droidinput::InputEventFactoryInterface
 public:
     MOCK_METHOD0(createKeyEvent, droidinput::KeyEvent*());
     MOCK_METHOD0(createMotionEvent, droidinput::MotionEvent*());
+    MOCK_METHOD0(createRawBufferEvent, droidinput::RawBufferEvent*());
 };
 
 class MockInputReport : public mir::input::InputReport
@@ -104,30 +106,30 @@ public:
     float const pressure = 0.6f;
     float const major = 8;
     float const minor = 4;
-    float const size = 8;
+    float const orientation = 8;
     mir::geometry::Displacement const movement{10, -10};
     std::shared_ptr<mir::cookie::Authority> const cookie_authority;
     mi::DefaultEventBuilder builder;
+    mtd::MockInputSeat seat;
 
     AndroidInputSender()
         : cookie_authority(mir::cookie::Authority::create_from({0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88})),
-          builder(MirInputDeviceId(), cookie_authority),
+          builder(MirInputDeviceId(), cookie_authority, mt::fake_shared(seat)),
           key_event(builder.key_event(std::chrono::nanoseconds(1), mir_keyboard_action_down, 7, test_scan_code)),
-          motion_event(builder.touch_event(std::chrono::nanoseconds(-1))),
+          motion_event(builder.touch_event(
+                  std::chrono::nanoseconds(-1),
+                  {{0, mir_touch_action_change, tool, test_x_coord[0], test_y_coord[0], pressure, major, minor, orientation},
+                   {1, mir_touch_action_change, tool, test_x_coord[1], test_y_coord[1], pressure, major, minor, orientation}})),
           pointer_event(builder.pointer_event(std::chrono::nanoseconds(123), mir_pointer_action_motion,
                                         mir_pointer_button_primary, 0.0f, 0.0f,
-                                        movement.dx.as_float(), movement.dy.as_float()))
+                                        movement.dx.as_int(), movement.dy.as_int()))
 
     {
         using namespace ::testing;
 
-        builder.add_touch(*motion_event, 0, mir_touch_action_change, tool, test_x_coord[0], test_y_coord[0],
-                       pressure, major, minor, size);
-        builder.add_touch(*motion_event, 1, mir_touch_action_change, tool, test_x_coord[1], test_y_coord[1],
-                       pressure, major, minor, size);
-
         ON_CALL(event_factory, createKeyEvent()).WillByDefault(Return(&client_key_event));
         ON_CALL(event_factory, createMotionEvent()).WillByDefault(Return(&client_motion_event));
+        ON_CALL(event_factory, createRawBufferEvent()).WillByDefault(Return(&client_raw_event));
     }
 
     void register_surface()
@@ -140,7 +142,7 @@ public:
         fake_scene.observer->surface_removed(&stub_surface);
     }
 
-    std::shared_ptr<mi::InputChannel> channel = std::make_shared<mia::AndroidInputChannel>();
+    std::shared_ptr<mi::InputChannel> channel = std::make_shared<mi::Channel>();
     mtd::StubSceneSurface stub_surface{channel->server_fd()};
     droidinput::sp<droidinput::InputChannel> client_channel{new droidinput::InputChannel(droidinput::String8("test"), channel->client_fd())};
     droidinput::InputConsumer consumer{client_channel};
@@ -154,6 +156,7 @@ public:
 
     droidinput::MotionEvent client_motion_event;
     droidinput::KeyEvent client_key_event;
+    droidinput::RawBufferEvent client_raw_event;
 
     testing::NiceMock<MockInputEventFactory> event_factory;
 
@@ -299,8 +302,8 @@ TEST_F(AndroidInputSender, sends_pointer_events)
 
     EXPECT_EQ(1, client_motion_event.getPointerCount());
 
-    EXPECT_EQ(movement.dx.as_float(), client_motion_event.getAxisValue(AMOTION_EVENT_AXIS_RX, 0));
-    EXPECT_EQ(movement.dy.as_float(), client_motion_event.getAxisValue(AMOTION_EVENT_AXIS_RY, 0));
+    EXPECT_EQ(movement.dx.as_int(), client_motion_event.getAxisValue(AMOTION_EVENT_AXIS_RX, 0));
+    EXPECT_EQ(movement.dy.as_int(), client_motion_event.getAxisValue(AMOTION_EVENT_AXIS_RY, 0));
     EXPECT_EQ(AMOTION_EVENT_TOOL_TYPE_MOUSE, client_motion_event.getToolType(0));
     EXPECT_EQ(AINPUT_SOURCE_MOUSE, client_motion_event.getSource());
 }
@@ -349,9 +352,10 @@ TEST_F(AndroidInputSender, encodes_multiple_touch_contact_downs_as_multiple_even
     // TODO When the rework of the transport encoding is finished we might want to revisit this decision
     register_surface();
 
-    auto touch_ev_with_simultaneous_down = builder.touch_event(std::chrono::nanoseconds(86));
-    builder.add_touch(*touch_ev_with_simultaneous_down, 2, mir_touch_action_down, tool, 50, 60, pressure, major, minor, size);
-    builder.add_touch(*touch_ev_with_simultaneous_down, 4, mir_touch_action_down, tool, 80, 90, pressure, major, minor, size);
+    auto touch_ev_with_simultaneous_down = builder.touch_event(
+        std::chrono::nanoseconds(86),
+        {{2, mir_touch_action_down, tool, 50, 60, pressure, major, minor, orientation},
+         {4, mir_touch_action_down, tool, 80, 90, pressure, major, minor, orientation}});
 
     sender.send_event(*touch_ev_with_simultaneous_down, channel);
 
@@ -376,10 +380,11 @@ TEST_F(AndroidInputSender, encodes_multiple_touch_contact_downs_as_multiple_even
     // TODO When the rework of the transport encoding is finished we might want to revisit this decision
     register_surface();
 
-    auto touch_ev_with_simultaneous_down = builder.touch_event(std::chrono::nanoseconds(86));
-    builder.add_touch(*touch_ev_with_simultaneous_down, 2, mir_touch_action_down, tool, 50, 60, pressure, major, minor, size);
-    builder.add_touch(*touch_ev_with_simultaneous_down, 3, mir_touch_action_change, tool, 10, 10, pressure, major, minor, size);
-    builder.add_touch(*touch_ev_with_simultaneous_down, 4, mir_touch_action_down, tool, 80, 90, pressure, major, minor, size);
+    auto touch_ev_with_simultaneous_down = builder.touch_event(
+        std::chrono::nanoseconds(86),
+        {{2, mir_touch_action_down, tool, 50, 60, pressure, major, minor, orientation},
+         {3, mir_touch_action_change, tool, 10, 10, pressure, major, minor, orientation},
+         {4, mir_touch_action_down, tool, 80, 90, pressure, major, minor, orientation}});
 
     sender.send_event(*touch_ev_with_simultaneous_down, channel);
 
@@ -406,10 +411,11 @@ TEST_F(AndroidInputSender, encodes_multiple_releases_in_several_events)
     // TODO When the rework of the transport encoding is finished we might want to revisit this decision
     register_surface();
 
-    auto touch_ev_with_simultaneous_down = builder.touch_event(std::chrono::nanoseconds(86));
-    builder.add_touch(*touch_ev_with_simultaneous_down, 2, mir_touch_action_up, tool, 50, 60, pressure, major, minor, size);
-    builder.add_touch(*touch_ev_with_simultaneous_down, 3, mir_touch_action_change, tool, 10, 10, pressure, major, minor, size);
-    builder.add_touch(*touch_ev_with_simultaneous_down, 4, mir_touch_action_up, tool, 80, 90, pressure, major, minor, size);
+    auto touch_ev_with_simultaneous_down = builder.touch_event(
+        std::chrono::nanoseconds(86),
+        {{2, mir_touch_action_up, tool, 50, 60, pressure, major, minor, orientation},
+         {3, mir_touch_action_change, tool, 10, 10, pressure, major, minor, orientation},
+         {4, mir_touch_action_up, tool, 80, 90, pressure, major, minor, orientation}});
 
     sender.send_event(*touch_ev_with_simultaneous_down, channel);
 
@@ -436,10 +442,11 @@ TEST_F(AndroidInputSender, encodes_combinations_of_up_and_down_one_by_one)
     // TODO When the rework of the transport encoding is finished we might want to revisit this decision
     register_surface();
 
-    auto touch_ev_with_simultaneous_down = builder.touch_event(std::chrono::nanoseconds(86));
-    builder.add_touch(*touch_ev_with_simultaneous_down, 2, mir_touch_action_up, tool, 50, 60, pressure, major, minor, size);
-    builder.add_touch(*touch_ev_with_simultaneous_down, 3, mir_touch_action_change, tool, 10, 10, pressure, major, minor, size);
-    builder.add_touch(*touch_ev_with_simultaneous_down, 4, mir_touch_action_down, tool, 80, 90, pressure, major, minor, size);
+    auto touch_ev_with_simultaneous_down = builder.touch_event(
+        std::chrono::nanoseconds(86),
+        {{2, mir_touch_action_up, tool, 50, 60, pressure, major, minor, orientation},
+         {3, mir_touch_action_change, tool, 10, 10, pressure, major, minor, orientation},
+         {4, mir_touch_action_down, tool, 80, 90, pressure, major, minor, orientation}});
 
     sender.send_event(*touch_ev_with_simultaneous_down, channel);
 
@@ -465,10 +472,11 @@ TEST_F(AndroidInputSender, encodes_combinations_of_down_and_up_one_by_one)
     // TODO When the rework of the transport encoding is finished we might want to revisit this decision
     register_surface();
 
-    auto touch_ev_with_simultaneous_down = builder.touch_event(std::chrono::nanoseconds(86));
-    builder.add_touch(*touch_ev_with_simultaneous_down, 2, mir_touch_action_down, tool, 50, 60, pressure, major, minor, size);
-    builder.add_touch(*touch_ev_with_simultaneous_down, 3, mir_touch_action_change, tool, 10, 10, pressure, major, minor, size);
-    builder.add_touch(*touch_ev_with_simultaneous_down, 4, mir_touch_action_up, tool, 80, 90, pressure, major, minor, size);
+    auto touch_ev_with_simultaneous_down = builder.touch_event(
+        std::chrono::nanoseconds(86),
+        {{2, mir_touch_action_down, tool, 50, 60, pressure, major, minor, orientation},
+         {3, mir_touch_action_change, tool, 10, 10, pressure, major, minor, orientation},
+         {4, mir_touch_action_up, tool, 80, 90, pressure, major, minor, orientation}});
 
     sender.send_event(*touch_ev_with_simultaneous_down, channel);
 
@@ -489,4 +497,43 @@ TEST_F(AndroidInputSender, encodes_combinations_of_down_and_up_one_by_one)
     EXPECT_EQ(3, client_motion_event.getPointerId(1));
     EXPECT_EQ(4, client_motion_event.getPointerId(2));
     EXPECT_EQ(3, client_motion_event.getPointerCount());
+}
+
+TEST_F(AndroidInputSender, encodes_input_device_state_event_as_raw_buffer_event)
+{
+    const float cursor_x = 50.0f;
+    const float cursor_y = 60.0f;
+    const auto timestamp = std::chrono::nanoseconds(10);
+    register_surface();
+    std::vector<mir::events::InputDeviceState> states;
+    std::vector<uint32_t> const pressed_keys = {50, 60, 80};
+    states.push_back({MirInputDeviceId{23}, pressed_keys, 0});
+    states.push_back({MirInputDeviceId{21}, {}, mir_pointer_button_primary});
+
+    auto device_state = mir::events::make_event(timestamp, mir_pointer_button_primary, mir_input_event_modifier_caps_lock,
+                                                cursor_x, cursor_y, std::move(states));
+
+    sender.send_event(*device_state, channel);
+    EXPECT_EQ(droidinput::OK, consumer.consume(&event_factory, true, std::chrono::nanoseconds(86), &seq, &event));
+    EXPECT_EQ(&client_raw_event, event);
+
+    auto dest_event = MirEvent::deserialize(client_raw_event.buffer);
+    ASSERT_THAT(mir_event_get_type(dest_event.get()), mir_event_type_input_device_state);
+
+    auto input_device_state = mir_event_get_input_device_state_event(dest_event.get());
+    EXPECT_THAT(mir_input_device_state_event_time(input_device_state), Eq(timestamp.count()));
+    EXPECT_THAT(mir_input_device_state_event_modifiers(input_device_state), Eq(mir_input_event_modifier_caps_lock));
+    EXPECT_THAT(mir_input_device_state_event_device_count(input_device_state), Eq(2));
+    EXPECT_THAT(mir_input_device_state_event_device_id(input_device_state, 0), Eq(MirInputDeviceId{23}));
+    auto keys_count = mir_input_device_state_event_device_pressed_keys_count(input_device_state, 0);
+    EXPECT_THAT(keys_count, Eq(3));
+    for (uint32_t i = 0; i < keys_count; i++)
+    {
+        EXPECT_THAT(mir_input_device_state_event_device_pressed_keys_for_index(input_device_state, 0, i), Eq(pressed_keys[i]));
+    }
+    EXPECT_THAT(mir_input_device_state_event_device_pointer_buttons(input_device_state, 0), 0);
+
+    EXPECT_THAT(mir_input_device_state_event_device_id(input_device_state, 1), Eq(MirInputDeviceId{21}));
+    EXPECT_THAT(mir_input_device_state_event_device_pressed_keys_count(input_device_state, 1), Eq(0));
+    EXPECT_THAT(mir_input_device_state_event_device_pointer_buttons(input_device_state, 1), mir_pointer_button_primary);
 }

@@ -17,6 +17,7 @@
  */
 
 #include "src/client/input/android/android_input_receiver.h"
+#include "src/server/input/channel.h"
 #include "mir/input/null_input_receiver_report.h"
 #include "mir/input/xkb_mapper.h"
 #include "mir/events/event_private.h"
@@ -35,11 +36,13 @@
 #include <memory>
 #include <system_error>
 #include <boost/throw_exception.hpp>
+#include <atomic>
 
 namespace mircv = mir::input::receiver;
 namespace mircva = mircv::android;
 namespace md = mir::dispatch;
 namespace mt = mir::test;
+namespace mi = mir::input;
 
 namespace droidinput = android;
 
@@ -130,32 +133,16 @@ public:
 class AndroidInputReceiverSetup : public testing::Test
 {
 public:
-    AndroidInputReceiverSetup()
-        : event_handler{[this](MirEvent* ev)
-                        {
-                            last_event = *ev;
-                        }}
-    {
-        auto status = droidinput::InputChannel::openInputFdPair(server_fd, client_fd);
-        EXPECT_EQ(droidinput::OK, status);
-    }
-    ~AndroidInputReceiverSetup()
-    {
-        close(server_fd);
-        close(client_fd);
-    }
-
     void flush_channels()
     {
-        fsync(server_fd);
-        fsync(client_fd);
+        fsync(channel.server_fd());
+        fsync(channel.client_fd());
     }
 
-    int server_fd, client_fd;
+    mi::Channel channel;
 
     static std::chrono::milliseconds const next_event_timeout;
-    MirEvent last_event;
-    std::function<void(MirEvent*)> event_handler;
+    std::function<void(MirEvent*)> event_handler{[](MirEvent*){}};
 };
 
 std::chrono::milliseconds const AndroidInputReceiverSetup::next_event_timeout(1000);
@@ -163,11 +150,19 @@ std::chrono::milliseconds const AndroidInputReceiverSetup::next_event_timeout(10
 
 TEST_F(AndroidInputReceiverSetup, receiver_receives_key_events)
 {
-    mircva::InputReceiver receiver{client_fd,
+    MirKeyboardEvent last_event;
+    mircva::InputReceiver receiver{channel.client_fd(),
                                    std::make_shared<mircv::XKBMapper>(),
-                                   event_handler,
+                                   [&last_event](MirEvent* ev)
+                                   {
+                                       if (ev->type() == mir_event_type_input &&
+                                           ev->to_input()->input_type() == mir_input_event_type_key)
+                                       {
+                                           last_event = *ev->to_input()->to_keyboard();
+                                       }
+                                   },
                                    std::make_shared<mircv::NullInputReceiverReport>()};
-    TestingInputProducer producer{server_fd};
+    TestingInputProducer producer{channel.server_fd()};
 
     producer.produce_a_key_event();
 
@@ -176,17 +171,17 @@ TEST_F(AndroidInputReceiverSetup, receiver_receives_key_events)
     EXPECT_TRUE(mt::fd_becomes_readable(receiver.watch_fd(), next_event_timeout));
     receiver.dispatch(md::FdEvent::readable);
 
-    EXPECT_EQ(mir_event_type_key, last_event.type);
-    EXPECT_EQ(producer.testing_key_event_scan_code, last_event.key.scan_code);
+    EXPECT_EQ(mir_input_event_type_key, last_event.input_type());
+    EXPECT_EQ(producer.testing_key_event_scan_code, last_event.scan_code());
 }
 
 TEST_F(AndroidInputReceiverSetup, receiver_handles_events)
 {
-    mircva::InputReceiver receiver{client_fd,
+    mircva::InputReceiver receiver{channel.client_fd(),
                                    std::make_shared<mircv::XKBMapper>(),
                                    event_handler,
                                    std::make_shared<mircv::NullInputReceiverReport>()};
-    TestingInputProducer producer(server_fd);
+    TestingInputProducer producer(channel.server_fd());
 
     producer.produce_a_key_event();
     flush_channels();
@@ -199,24 +194,28 @@ TEST_F(AndroidInputReceiverSetup, receiver_handles_events)
     EXPECT_TRUE(producer.must_receive_handled_signal());
 }
 
-TEST_F(AndroidInputReceiverSetup, receiver_consumes_batched_motion_events)
+TEST_F(AndroidInputReceiverSetup, receiver_consumes_all_motion_events)
 {
-    mircva::InputReceiver receiver{client_fd,
+    mircva::InputReceiver receiver{channel.client_fd(),
                                    std::make_shared<mircv::XKBMapper>(),
                                    event_handler,
                                    std::make_shared<mircv::NullInputReceiverReport>()};
 
-    TestingInputProducer producer(server_fd);
+    TestingInputProducer producer(channel.server_fd());
 
     // Produce 3 motion events before client handles any.
-    producer.produce_a_pointer_event(0, 0, std::chrono::nanoseconds(0));
-    producer.produce_a_pointer_event(0, 0, std::chrono::nanoseconds(0));
-    producer.produce_a_pointer_event(0, 0, std::chrono::nanoseconds(0));
+    int const nevents = 3;
+    for (int i = 0; i < nevents; ++i)
+        producer.produce_a_pointer_event(0, 0, std::chrono::nanoseconds(0));
 
     flush_channels();
 
-    EXPECT_TRUE(mt::fd_becomes_readable(receiver.watch_fd(), next_event_timeout));
-    receiver.dispatch(md::FdEvent::readable);
+    for (int j = 0; j < nevents; ++j)
+    {
+        EXPECT_TRUE(mt::fd_becomes_readable(receiver.watch_fd(),
+                                            next_event_timeout));
+        receiver.dispatch(md::FdEvent::readable);
+    }
 
     // Now there should be no events
     EXPECT_FALSE(mt::fd_is_readable(receiver.watch_fd()));
@@ -224,76 +223,42 @@ TEST_F(AndroidInputReceiverSetup, receiver_consumes_batched_motion_events)
 
 TEST_F(AndroidInputReceiverSetup, slow_raw_input_doesnt_cause_frameskipping)
 {  // Regression test for LP: #1372300
-    using namespace testing;
     using namespace std::chrono;
     using namespace std::literals::chrono_literals;
 
-    auto t = 0ns;
+    std::atomic_int handler_called{0};
 
-    MirEvent ev;
-    bool handler_called{false};
-
-    mircva::InputReceiver receiver{client_fd,
+    mircva::InputReceiver receiver{channel.client_fd(),
                                    std::make_shared<mircv::XKBMapper>(),
-                                   [&ev, &handler_called](MirEvent* event)
+                                   [&handler_called](MirEvent*)
                                    {
-                                       ev = *event;
-                                       handler_called = true;
+                                       ++handler_called;
                                    },
-                                   std::make_shared<mircv::NullInputReceiverReport>(),
-                                   [&t](int)
-                                   {
-                                       return t;
-                                   }};
-    TestingInputProducer producer(server_fd);
+                                   std::make_shared<mircv::NullInputReceiverReport>()};
+    TestingInputProducer producer(channel.server_fd());
 
-    nanoseconds const one_frame = duration_cast<nanoseconds>(1s) / 60;
+    nanoseconds const one_frame = duration_cast<nanoseconds>(1s) / 59;
 
-    producer.produce_a_pointer_event(123, 456, t);
-    producer.produce_a_key_event();
+    producer.produce_a_pointer_event(123, 456, 0ns);
+    producer.produce_a_pointer_event(234, 567, one_frame);
     flush_channels();
 
-    // Key events don't get resampled. Will be reported first.
     EXPECT_TRUE(mt::fd_becomes_readable(receiver.watch_fd(), next_event_timeout));
     receiver.dispatch(md::FdEvent::readable);
-    EXPECT_TRUE(handler_called);
-    ASSERT_EQ(mir_event_type_key, ev.type);
+    EXPECT_EQ(1, handler_called);
 
-    // The motion is still too new. Won't be reported yet, but is batched.
-    auto start = high_resolution_clock::now();
-
-    EXPECT_TRUE(mt::fd_becomes_readable(receiver.watch_fd(), 1ms));
-    handler_called = false;
+    EXPECT_TRUE(mt::fd_becomes_readable(receiver.watch_fd(), 2 * one_frame));
     receiver.dispatch(md::FdEvent::readable);
-    // We've processed the data, but no new event has been generated.
-    EXPECT_FALSE(handler_called);
-
-    auto end = high_resolution_clock::now();
-    auto duration = end - start;
-
-    // Verify we timed out in under a frame (LP: #1372300)
-    // Sadly using real time as droidinput::Looper doesn't use a mocked clock.
-    ASSERT_LT(duration, one_frame);
-
-    // Verify we don't use all the CPU by not sleeping (LP: #1373809)
-    EXPECT_GT(duration, 1ms);
-
-    // But later in a frame or so, the motion will be reported:
-    t += 2 * one_frame;  // Account for the slower 59Hz event rate
-    EXPECT_TRUE(mt::fd_becomes_readable(receiver.watch_fd(), next_event_timeout));
-    receiver.dispatch(md::FdEvent::readable);
-
-    EXPECT_TRUE(handler_called);
-    EXPECT_EQ(mir_event_type_motion, ev.type);
+    EXPECT_EQ(2, handler_called);
 }
 
 TEST_F(AndroidInputReceiverSetup, finish_signalled_after_handler)
 {
     bool handler_called = false;
 
-    TestingInputProducer producer(server_fd);
+    TestingInputProducer producer(channel.server_fd());
     mircva::InputReceiver receiver{
-        client_fd,
+        channel.client_fd(),
         std::make_shared<mircv::XKBMapper>(),
         [&handler_called, &producer](MirEvent*)
         {
@@ -310,62 +275,6 @@ TEST_F(AndroidInputReceiverSetup, finish_signalled_after_handler)
     EXPECT_TRUE(producer.must_receive_handled_signal());
 }
 
-TEST_F(AndroidInputReceiverSetup, rendering_does_not_lag_behind_input)
-{
-    using namespace testing;
-    using namespace std::chrono;
-    using namespace std::literals::chrono_literals;
-
-    std::chrono::nanoseconds t;
-
-    int frames_triggered = 0;
-
-    mircva::InputReceiver receiver{client_fd,
-                                   std::make_shared<mircv::XKBMapper>(),
-                                   [&frames_triggered](MirEvent*)
-                                   {
-                                       ++frames_triggered;
-                                   },
-                                   std::make_shared<mircv::NullInputReceiverReport>(),
-                                   [&t](int)
-                                   {
-                                       return t;
-                                   }};
-    TestingInputProducer producer(server_fd);
-
-    std::chrono::nanoseconds const device_sample_interval = duration_cast<nanoseconds>(1s) / 250;
-    std::chrono::nanoseconds const frame_interval = duration_cast<nanoseconds>(1s) / 60;
-    std::chrono::nanoseconds const gesture_duration = 1s;
-
-    std::chrono::nanoseconds last_produced = 0ns;
-
-    for (t = 0ns; t < gesture_duration; t += 1ms)
-    {
-        if (!t.count() || t >= (last_produced + device_sample_interval))
-        {
-            last_produced = t;
-            float a = t.count() * M_PI / 1000000.0f;
-            float x = 500.0f * sinf(a);
-            float y = 1000.0f * cosf(a);
-            producer.produce_a_pointer_event(x, y, t);
-            flush_channels();
-        }
-
-        if (mt::fd_is_readable(receiver.watch_fd()))
-        {
-            receiver.dispatch(md::FdEvent::readable);
-        }
-    }
-
-    // If the rendering time resulting from the gesture is longer than the
-    // gesture itself then that's laggy...
-    std::chrono::nanoseconds render_duration = frame_interval * frames_triggered;
-    EXPECT_THAT(render_duration, Le(gesture_duration));
-
-    int average_lag_milliseconds = (render_duration - gesture_duration) / (frames_triggered * 1ms);
-    EXPECT_THAT(average_lag_milliseconds, Le(1));
-}
-
 TEST_F(AndroidInputReceiverSetup, input_comes_in_phase_with_rendering)
 {
     using namespace testing;
@@ -373,12 +282,12 @@ TEST_F(AndroidInputReceiverSetup, input_comes_in_phase_with_rendering)
     std::chrono::nanoseconds t;
 
     mircva::InputReceiver receiver{
-        client_fd,
+        channel.client_fd(),
         std::make_shared<mircv::XKBMapper>(),
         event_handler,
         std::make_shared<mircv::NullInputReceiverReport>(),
     };
-    TestingInputProducer producer(server_fd);
+    TestingInputProducer producer(channel.server_fd());
 
     std::chrono::nanoseconds const one_millisecond = std::chrono::nanoseconds(1000000ULL);
     std::chrono::nanoseconds const one_second = 1000 * one_millisecond;

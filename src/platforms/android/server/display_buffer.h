@@ -63,9 +63,11 @@ public:
     void make_current() override;
     void release_current() override;
     void swap_buffers() override;
-    bool post_renderables_if_optimizable(RenderableList const& renderlist) override;
+    bool overlay(RenderableList const& renderlist) override;
+    void bind() override;
 
     MirOrientation orientation() const override;
+    MirMirrorMode mirror_mode() const override;
     NativeDisplayBuffer* native_display_buffer() override;
 
     void configure(MirPowerMode power_mode, MirOrientation orientation, geometry::Displacement) override;

@@ -34,11 +34,13 @@
 #include "mir/events/event_builders.h"
 
 #include <chrono>
+#include <thread>
 
 namespace mi = mir::input;
 namespace mie = mi::evdev;
 namespace md = mir::dispatch;
 namespace mtf = mir_test_framework;
+namespace synthesis = mir::input::synthesis;
 
 mtf::FakeInputDeviceImpl::FakeInputDeviceImpl(mi::InputDeviceInfo const& info)
     : queue{std::make_shared<md::ActionQueue>()}, device{std::make_shared<InputDevice>(info, queue)}
@@ -91,6 +93,24 @@ void mtf::FakeInputDeviceImpl::emit_event(synthesis::TouchParameters const& touc
                    });
 }
 
+void mtf::FakeInputDeviceImpl::emit_touch_sequence(std::function<mir::input::synthesis::TouchParameters(int)> const& event_generator,
+                                                   int count,
+                                                   std::chrono::duration<double> delay)
+{
+    queue->enqueue(
+        [this, event_generator, count, delay]()
+        {
+            auto start = std::chrono::steady_clock::now();
+            for (int i = 0;i < count;++i)
+            {
+                std::this_thread::sleep_until(start + i * delay);
+                device->synthesize_events(event_generator(i++));
+                std::this_thread::yield();
+            }
+        });
+}
+
+
 mtf::FakeInputDeviceImpl::InputDevice::InputDevice(mi::InputDeviceInfo const& info,
                                                    std::shared_ptr<mir::dispatch::Dispatchable> const& dispatchable)
     : info(info), queue{dispatchable}, buttons{0}
@@ -125,8 +145,8 @@ void mtf::FakeInputDeviceImpl::InputDevice::synthesize_events(synthesis::ButtonP
     auto button_event = builder->pointer_event(event_time,
                                                action,
                                                buttons,
-                                               scroll.x.as_float(),
-                                               scroll.y.as_float(),
+                                               scroll.x.as_int(),
+                                               scroll.y.as_int(),
                                                0.0f,
                                                0.0f);
 
@@ -166,8 +186,8 @@ void mtf::FakeInputDeviceImpl::InputDevice::synthesize_events(synthesis::MotionP
     auto pointer_event = builder->pointer_event(event_time,
                                                 mir_pointer_action_motion,
                                                 buttons,
-                                                scroll.x.as_float(),
-                                                scroll.y.as_float(),
+                                                scroll.x.as_int(),
+                                                scroll.y.as_int(),
                                                 rel_x,
                                                 rel_y);
 
@@ -179,10 +199,8 @@ void mtf::FakeInputDeviceImpl::InputDevice::synthesize_events(synthesis::TouchPa
     if (!sink)
         BOOST_THROW_EXCEPTION(std::runtime_error("Device is not started."));
 
-    auto event_time = std::chrono::duration_cast<std::chrono::nanoseconds>(
+    auto const event_time = std::chrono::duration_cast<std::chrono::nanoseconds>(
         std::chrono::steady_clock::now().time_since_epoch());
-
-    auto touch_event = builder->touch_event(event_time);
 
     auto touch_action = mir_touch_action_up;
     if (touch.action == synthesis::TouchParameters::Action::Tap)
@@ -190,27 +208,14 @@ void mtf::FakeInputDeviceImpl::InputDevice::synthesize_events(synthesis::TouchPa
     else if (touch.action == synthesis::TouchParameters::Action::Move)
         touch_action = mir_touch_action_change;
 
-    MirTouchId touch_id = 1;
-    float pressure = 1.0f;
-
     float abs_x = touch.abs_x;
     float abs_y = touch.abs_y;
     map_touch_coordinates(abs_x, abs_y);
     // those values would need scaling too as soon as they can be controlled by the caller
-    float touch_major = 5.0f;
-    float touch_minor = 8.0f;
-    float size_value = 8.0f;
 
-    builder->add_touch(*touch_event,
-                       touch_id,
-                       touch_action,
-                       mir_touch_tooltype_finger,
-                       abs_x,
-                       abs_y,
-                       pressure,
-                       touch_major,
-                       touch_minor,
-                       size_value);
+    auto touch_event = builder->touch_event(
+        event_time,
+        {{MirTouchId{1}, touch_action, mir_touch_tooltype_finger, abs_x, abs_y, 1.0f, 8.0f, 5.0f, 0.0f}});
 
     sink->handle_input(*touch_event);
 }
@@ -235,7 +240,7 @@ void mtf::FakeInputDeviceImpl::InputDevice::apply_settings(mi::PointerSettings c
 mir::optional_value<mi::TouchpadSettings> mtf::FakeInputDeviceImpl::InputDevice::get_touchpad_settings() const
 {
     mir::optional_value<mi::TouchpadSettings> ret;
-    if (contains(info.capabilities, mi::DeviceCapability::pointer))
+    if (contains(info.capabilities, mi::DeviceCapability::touchpad))
         ret = mi::TouchpadSettings();
 
     return ret;
@@ -252,10 +257,10 @@ void mtf::FakeInputDeviceImpl::InputDevice::map_touch_coordinates(float& x, floa
     // TODO take orientation of input sink into account?
     auto area = sink->bounding_rectangle();
     auto touch_range = FakeInputDevice::maximum_touch_axis_value - FakeInputDevice::minimum_touch_axis_value + 1;
-    auto x_scale = area.size.width.as_float() / float(touch_range);
-    auto y_scale = area.size.height.as_float() / float(touch_range);
-    x = (x - float(FakeInputDevice::minimum_touch_axis_value))*x_scale + area.top_left.x.as_float();
-    y = (y - float(FakeInputDevice::minimum_touch_axis_value))*y_scale + area.top_left.y.as_float();
+    auto x_scale = area.size.width.as_int() / float(touch_range);
+    auto y_scale = area.size.height.as_int() / float(touch_range);
+    x = (x - float(FakeInputDevice::minimum_touch_axis_value))*x_scale + area.top_left.x.as_int();
+    y = (y - float(FakeInputDevice::minimum_touch_axis_value))*y_scale + area.top_left.y.as_int();
 }
 
 void mtf::FakeInputDeviceImpl::InputDevice::start(mi::InputSink* destination, mi::EventBuilder* event_builder)

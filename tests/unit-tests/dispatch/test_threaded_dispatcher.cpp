@@ -19,6 +19,7 @@
 #include "mir/dispatch/threaded_dispatcher.h"
 #include "mir/dispatch/dispatchable.h"
 #include "mir/fd.h"
+#include "mir/test/death.h"
 #include "mir/test/pipe.h"
 #include "mir/test/signal.h"
 #include "mir/test/test_dispatchable.h"
@@ -129,11 +130,10 @@ TEST_F(ThreadedDispatcherTest, doesnt_call_dispatch_after_first_false_return)
 
     int constexpr expected_count{10};
     auto dispatched_more_than_enough = std::make_shared<mt::Signal>();
+    std::atomic<int> dispatch_count{0};
 
-    auto delegate = [dispatched_more_than_enough](md::FdEvents)
+    auto delegate = [dispatched_more_than_enough, &dispatch_count](md::FdEvents)
     {
-        static std::atomic<int> dispatch_count{0};
-
         if (++dispatch_count == expected_count)
         {
             return false;
@@ -259,7 +259,6 @@ TEST_F(ThreadedDispatcherDeathTest, exceptions_in_threadpool_trigger_termination
     using namespace testing;
     using namespace std::chrono_literals;
 
-    FLAGS_gtest_death_test_style = "threadsafe";
     constexpr char const* exception_msg = "Ducks! Ducks attack!";
 
     auto dispatchable = std::make_shared<mt::TestDispatchable>([]()
@@ -272,8 +271,11 @@ TEST_F(ThreadedDispatcherDeathTest, exceptions_in_threadpool_trigger_termination
     // Ideally we'd use terminate_with_current_exception, but that's in server
     // and we're going to be called from a C context anyway, so just using the default
     // std::terminate behaviour should be acceptable.
-    EXPECT_EXIT({ md::ThreadedDispatcher dispatcher("Die!", dispatchable); std::this_thread::sleep_for(10s); },
-                KilledBySignal(SIGABRT), (std::string{".*"} + exception_msg + ".*").c_str());
+    MIR_EXPECT_EXIT(
+    {
+        md::ThreadedDispatcher dispatcher("Die!", dispatchable);
+        std::this_thread::sleep_for(10s);
+    }, KilledBySignal(SIGABRT), (std::string{".*"} + exception_msg + ".*").c_str());
 }
 
 TEST_F(ThreadedDispatcherTest, sets_thread_names_appropriately)
@@ -284,10 +286,10 @@ TEST_F(ThreadedDispatcherTest, sets_thread_names_appropriately)
     auto dispatched = std::make_shared<mt::Signal>();
     constexpr int const threadcount{3};
     constexpr char const* threadname_base{"Madness Thread"};
+    std::atomic<int> dispatch_count{0};
 
-    auto dispatchable = std::make_shared<mt::TestDispatchable>([dispatched]()
+    auto dispatchable = std::make_shared<mt::TestDispatchable>([dispatched, &dispatch_count]()
     {
-        static std::atomic<int> dispatch_count{0};
         char buffer[80] = {0};
         pthread_getname_np(pthread_self(), buffer, sizeof(buffer));
         EXPECT_THAT(buffer, StartsWith(threadname_base));
@@ -322,6 +324,7 @@ TEST(ThreadedDispatcherSignalTest, keeps_dispatching_after_signal_interruption)
 {
     using namespace std::chrono_literals;
     mt::CrossProcessAction stop_and_restart_process;
+    mt::CrossProcessSync exit_success_sync;
 
     auto child = mir_test_framework::fork_and_run_in_a_different_process(
         [&]
@@ -356,11 +359,14 @@ TEST(ThreadedDispatcherSignalTest, keeps_dispatching_after_signal_interruption)
                 dispatchable->trigger();
                 EXPECT_TRUE(dispatched->wait_for(5s));
 
+                if (!HasFailure())
+                    exit_success_sync.signal_ready();
+
                 // Because we terminate this process with an explicit call to
                 // exit(), objects on the stack are not destroyed.
-                // We need to destroy the stop_and_restart_process object 
-                // manually to avoid fd leaks.
+                // We need to destroy these objects manually to avoid fd leaks.
                 stop_and_restart_process.~CrossProcessAction();
+                exit_success_sync.~CrossProcessSync();
             }
 
             exit(HasFailure() ? EXIT_FAILURE : EXIT_SUCCESS);
@@ -379,7 +385,17 @@ TEST(ThreadedDispatcherSignalTest, keeps_dispatching_after_signal_interruption)
         });
 
     auto const result = child->wait_for_termination(30s);
-    EXPECT_TRUE(result.succeeded());
+    EXPECT_TRUE(result.exited_normally());
+
+    // The test may run under valgrind which may change the exit code of the
+    // forked child if it detects any issues. Issues detected by valgrind are
+    // outside the scope of the test - they are for the parent caller to
+    // examine and determine their validity; hence here we ignore the exit
+    // code and instead use a sync object to determine if the child ran the
+    // test successfully.
+    // The child has already exited here so there's no reason to wait.
+    auto const exit_success = exit_success_sync.wait_for_signal_ready_for(0s);
+    EXPECT_TRUE(exit_success);
 }
 
 TEST_F(ThreadedDispatcherDeathTest, destroying_dispatcher_from_a_callback_is_an_error)
@@ -387,14 +403,20 @@ TEST_F(ThreadedDispatcherDeathTest, destroying_dispatcher_from_a_callback_is_an_
     using namespace testing;
     using namespace std::literals::chrono_literals;
 
-    EXPECT_EXIT(
+    MIR_EXPECT_EXIT(
     {
-        md::ThreadedDispatcher* dispatcher;
+        std::atomic<md::ThreadedDispatcher*> dispatcher;
 
-        auto dispatchable = std::make_shared<mt::TestDispatchable>([&dispatcher]() { delete dispatcher; });
+        auto dispatchable = std::make_shared<mt::TestDispatchable>(
+            [&dispatcher]()
+            {
+                delete dispatcher.load();
+            });
+
+        dispatcher = new md::ThreadedDispatcher("Death thread", dispatchable);
 
         dispatchable->trigger();
-        dispatcher = new md::ThreadedDispatcher("Death thread", dispatchable);
+
         std::this_thread::sleep_for(10s);
     }, KilledBySignal(SIGABRT), ".*Destroying ThreadedDispatcher.*");
 }

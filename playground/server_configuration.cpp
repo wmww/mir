@@ -28,22 +28,23 @@
 namespace me = mir::examples;
 namespace mg = mir::graphics;
 
-char const* const me::wm_option = "window-manager";
-char const* const me::wm_description = "window management strategy [{legacy|canonical|tiling}]";
-char const* const me::wm_tiling = "tiling";
-char const* const me::wm_legacy = "legacy";
-char const* const me::wm_canonical = "canonical";
+namespace
+{
+std::shared_ptr<mir::options::DefaultConfiguration> const& customize(
+    std::shared_ptr<mir::options::DefaultConfiguration> const& opt)
+{
+    opt->add_options()(me::display_config_opt,
+                       boost::program_options::value<std::string>()->
+                           default_value(me::clone_opt_val),
+                       me::display_config_descr);
+    
+    return opt;
+}
+}
 
 me::ServerConfiguration::ServerConfiguration(std::shared_ptr<options::DefaultConfiguration> const& configuration_options) :
-    DefaultServerConfiguration(configuration_options)
+    DefaultServerConfiguration(customize(configuration_options))
 {
-    namespace po = boost::program_options;
-
-    configuration_options->add_options()
-        (me::display_config_opt, po::value<std::string>()->default_value(me::clone_opt_val),
-            me::display_config_descr);
-    configuration_options->add_options()
-        (wm_option, po::value<std::string>()->default_value(wm_legacy), wm_description);
 }
 
 me::ServerConfiguration::ServerConfiguration(int argc, char const** argv) :

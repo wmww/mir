@@ -19,6 +19,7 @@
 #define MIR_CLIENT_LIBRARY_DEBUG_H
 
 #include <mir_toolkit/mir_client_library.h>
+#include <mir_toolkit/deprecations.h>
 
 /* This header defines debug interfaces that aren't expected to be generally useful
  * and do not have the same API-stability guarantees that the main API has */
@@ -27,22 +28,25 @@ extern "C" {
 #endif
 
 /**
- * Return the ID of a surface (only useful for debug output).
- *   \pre                 The surface is valid
- *   \param [in] surface  The surface
- *   \return              An internal ID that identifies the surface
+ * Return the ID of a window (only useful for debug output).
+ *   \pre                 The window is valid
+ *   \param [in] window   The window
+ *   \return              An internal ID that identifies the window
  */
-int mir_debug_surface_id(MirSurface *surface);
+int mir_debug_window_id(MirWindow *window);
 
 /**
- * Get the ID of the surface's current buffer (only useful for debug purposes)
- *   \pre                         The surface is valid
- *   \param   [in] surface        The surface
- *   \return                      The internal buffer ID of the surface's current buffer.
+ * Get the ID of the window's current buffer (only useful for debug purposes)
+ *   \pre                         The window is valid
+ *   \param   [in] window         The window
+ *   \return                      The internal buffer ID of the window's current buffer.
  *                                This is the buffer that is currently being drawn to,
- *                                and would be returned by mir_surface_get_current_buffer.
+ *                                and would be returned by mir_window_get_current_buffer.
  */
-uint32_t mir_debug_surface_current_buffer_id(MirSurface *surface);
+uint32_t mir_debug_window_current_buffer_id(MirWindow *window);
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 
 /**
  * Get the screen coordinates corresponding to a pair of surface coordinates
@@ -59,9 +63,18 @@ uint32_t mir_debug_surface_current_buffer_id(MirSurface *surface);
  *          This call will only be interesting for automated testing, where both the client
  *          and shell state is known and constrained.
  */
-bool mir_debug_surface_coords_to_screen(MirSurface* surface,
-                                        int x, int y,
-                                        int* screen_x, int* screen_y);
+bool mir_debug_surface_coords_to_screen(MirSurface *surface,
+                                       int x, int y,
+                                       int* screen_x, int* screen_y)
+MIR_FOR_REMOVAL_IN_VERSION_1("Use mir_extension_window_coordinate_translation instead");
+
+int mir_debug_surface_id(MirSurface *surface)
+MIR_FOR_REMOVAL_IN_VERSION_1("Use mir_debug_window_id() instead");
+
+uint32_t mir_debug_surface_current_buffer_id(MirSurface *surface)
+MIR_FOR_REMOVAL_IN_VERSION_1("Use mir_debug_window_current_buffer_id() instead");
+
+#pragma GCC diagnostic pop
 
 #ifdef __cplusplus
 }

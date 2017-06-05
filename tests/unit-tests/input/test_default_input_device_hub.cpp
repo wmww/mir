@@ -24,6 +24,8 @@
 #include "mir/test/doubles/mock_input_region.h"
 #include "mir/test/doubles/mock_input_seat.h"
 #include "mir/test/doubles/mock_event_sink.h"
+#include "mir/test/doubles/mock_key_mapper.h"
+#include "mir/test/doubles/mock_server_status_listener.h"
 #include "mir/test/doubles/stub_cursor_listener.h"
 #include "mir/test/doubles/stub_touch_visualizer.h"
 #include "mir/test/doubles/triggered_main_loop.h"
@@ -35,6 +37,8 @@
 #include "mir/dispatch/multiplexing_dispatchable.h"
 #include "mir/events/event_builders.h"
 #include "mir/input/cursor_listener.h"
+#include "mir/input/mir_pointer_config.h"
+#include "mir/input/mir_touchpad_config.h"
 #include "mir/cookie/authority.h"
 #include "mir/graphics/buffer.h"
 #include "mir/input/device.h"
@@ -79,12 +83,16 @@ struct InputDeviceHubTest : ::testing::Test
     mir::dispatch::MultiplexingDispatchable multiplexer;
     NiceMock<mtd::MockInputSeat> mock_seat;
     NiceMock<mtd::MockEventSink> mock_sink;
+    NiceMock<mtd::MockKeyMapper> mock_key_mapper;
+    NiceMock<mtd::MockServerStatusListener> mock_server_status_listener;
     mi::DefaultInputDeviceHub hub{mt::fake_shared(mock_sink), mt::fake_shared(mock_seat), mt::fake_shared(multiplexer),
-                                  mt::fake_shared(observer_loop), cookie_authority};
+                                  mt::fake_shared(observer_loop), cookie_authority, mt::fake_shared(mock_key_mapper), mt::fake_shared(mock_server_status_listener)};
     NiceMock<mtd::MockInputDeviceObserver> mock_observer;
     NiceMock<mtd::MockInputDevice> device{"device","dev-1", mi::DeviceCapability::unknown};
     NiceMock<mtd::MockInputDevice> another_device{"another_device","dev-2", mi::DeviceCapability::keyboard};
     NiceMock<mtd::MockInputDevice> third_device{"third_device","dev-3", mi::DeviceCapability::keyboard};
+    NiceMock<mtd::MockInputDevice> mouse{"mouse","dev-4", mi::DeviceCapability::pointer};
+    NiceMock<mtd::MockInputDevice> touchpad{"tpd","dev-5", mi::DeviceCapability::touchpad|mi::DeviceCapability::pointer};
 
     std::chrono::nanoseconds arbitrary_timestamp;
 
@@ -208,3 +216,41 @@ TEST_F(InputDeviceHubTest, observers_receive_device_changes)
     observer_loop.trigger_server_actions();
 }
 
+TEST_F(InputDeviceHubTest, emit_ready_to_receive_input_after_first_device_added)
+{
+    EXPECT_CALL(mock_server_status_listener, ready_for_user_input()).Times(1);
+    hub.add_device(mt::fake_shared(device));
+    hub.add_device(mt::fake_shared(another_device));
+
+    observer_loop.trigger_server_actions();
+}
+
+TEST_F(InputDeviceHubTest, emit_stop_receiving_input_after_last_device_added)
+{
+    EXPECT_CALL(mock_server_status_listener, stop_receiving_input()).Times(1);
+    hub.add_device(mt::fake_shared(device));
+    hub.add_device(mt::fake_shared(another_device));
+
+    hub.remove_device(mt::fake_shared(device));
+    hub.remove_device(mt::fake_shared(another_device));
+    observer_loop.trigger_server_actions();
+}
+
+TEST_F(InputDeviceHubTest, no_device_config_action_after_device_removal)
+{
+    std::shared_ptr<mi::Device> dev_ptr;
+    MirPointerConfig ptr_config;
+    ptr_config.cursor_acceleration_bias(0.5);
+
+    ON_CALL(mock_observer, device_added(WithName("mouse"))).WillByDefault(SaveArg<0>(&dev_ptr));
+
+    hub.add_device(mt::fake_shared(mouse));
+    hub.add_observer(mt::fake_shared(mock_observer));
+    observer_loop.trigger_server_actions();
+
+    EXPECT_CALL(mouse, apply_settings(Matcher<mi::PointerSettings const&>(_))).Times(0);
+
+    dev_ptr->apply_pointer_configuration(ptr_config);
+    hub.remove_device(mt::fake_shared(mouse));
+    observer_loop.trigger_server_actions();
+}

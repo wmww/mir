@@ -20,6 +20,7 @@
 #define MIR_TOOLKIT_EVENTS_INPUT_CONFIGURATION_EVENT_H_
 
 #include <mir_toolkit/events/event.h>
+#include <mir_toolkit/deprecations.h>
 
 #ifdef __cplusplus
 /**
@@ -44,15 +45,19 @@ typedef enum
 {
     mir_input_configuration_action_configuration_changed,
     mir_input_configuration_action_device_reset
-} MirInputConfigurationAction;
+} MirInputConfigurationAction
+MIR_FOR_REMOVAL_IN_VERSION_1("Input devices and changes to the input devices are indicated via the MirInputConfigCallback");
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 /**
  * Retrieve the input configuration action which occurred.
  *
  * \param[in] ev The input configuration event
  * \return       The action
  */
-MirInputConfigurationAction mir_input_configuration_event_get_action(MirInputConfigurationEvent const* ev);
+MirInputConfigurationAction mir_input_configuration_event_get_action(MirInputConfigurationEvent const* ev)
+MIR_FOR_REMOVAL_IN_VERSION_1("Input devices and changes to the input devices are indicated via the MirInputConfigCallback");
 
 /**
  * Retreive the time associated with a MirInputConfiguration event
@@ -60,7 +65,8 @@ MirInputConfigurationAction mir_input_configuration_event_get_action(MirInputCon
  * \param[in] ev The input configuration event
  * \return       The time in nanoseconds since epoch
  */
-int64_t mir_input_configuration_event_get_time(MirInputConfigurationEvent const* ev);
+int64_t mir_input_configuration_event_get_time(MirInputConfigurationEvent const* ev)
+MIR_FOR_REMOVAL_IN_VERSION_1("Input devices and changes to the input devices are indicated via the MirInputConfigCallback");
 
 /**
  * Retreive the device id associated with a MirInputConfiguration event
@@ -68,7 +74,9 @@ int64_t mir_input_configuration_event_get_time(MirInputConfigurationEvent const*
  * \param[in] ev The input configuration event
  * \return       The device id or -1 if not applicable to events of this action
  */
-MirInputDeviceId mir_input_configuration_event_get_device_id(MirInputConfigurationEvent const* ev);
+MirInputDeviceId mir_input_configuration_event_get_device_id(MirInputConfigurationEvent const* ev)
+MIR_FOR_REMOVAL_IN_VERSION_1("Input devices and changes to the input devices are indicated via the MirInputConfigCallback");
+#pragma GCC diagnostic pop
 
 #ifdef __cplusplus
 }

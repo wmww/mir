@@ -47,10 +47,6 @@ public:
         mir::protobuf::SurfaceModifications const* request,
         mir::protobuf::Void* response,
         google::protobuf::Closure* done) = 0;
-    virtual void next_buffer(
-        mir::protobuf::SurfaceId const* request,
-        mir::protobuf::Buffer* response,
-        google::protobuf::Closure* done) = 0;
     virtual void release_surface(
         mir::protobuf::SurfaceId const* request,
         mir::protobuf::Void* response,
@@ -67,8 +63,24 @@ public:
         mir::protobuf::DisplayConfiguration const* request,
         mir::protobuf::DisplayConfiguration* response,
         google::protobuf::Closure* done) = 0;
+    virtual void remove_session_configuration(
+        mir::protobuf::Void const* request,
+        mir::protobuf::Void* response,
+        google::protobuf::Closure* done) = 0;
     virtual void set_base_display_configuration(
         mir::protobuf::DisplayConfiguration const* request,
+        mir::protobuf::Void* response,
+        google::protobuf::Closure* done) = 0;
+    virtual void preview_base_display_configuration(
+        mir::protobuf::PreviewConfiguration const* request,
+        mir::protobuf::Void* response,
+        google::protobuf::Closure* done) = 0;
+    virtual void confirm_base_display_configuration(
+        mir::protobuf::DisplayConfiguration const* request,
+        mir::protobuf::Void* response,
+        google::protobuf::Closure* done) = 0;
+    virtual void cancel_base_display_configuration_preview(
+        mir::protobuf::Void const* request,
         mir::protobuf::Void* response,
         google::protobuf::Closure* done) = 0;
     virtual void create_screencast(
@@ -78,6 +90,10 @@ public:
     virtual void screencast_buffer(
         mir::protobuf::ScreencastId const* request,
         mir::protobuf::Buffer* response,
+        google::protobuf::Closure* done) = 0;
+    virtual void screencast_to_buffer(
+        mir::protobuf::ScreencastRequest const* request,
+        mir::protobuf::Void* response,
         google::protobuf::Closure* done) = 0;
     virtual void release_screencast(
         mir::protobuf::ScreencastId const* request,
@@ -101,15 +117,11 @@ public:
         google::protobuf::Closure* done) = 0;
     virtual void start_prompt_session(
         mir::protobuf::PromptSessionParameters const* request,
-        mir::protobuf::Void* response,
+        ::mir::protobuf::PromptSession* response,
         google::protobuf::Closure* done) = 0;
     virtual void stop_prompt_session(
-        mir::protobuf::Void const* request,
+        mir::protobuf::PromptSession const* request,
         mir::protobuf::Void* response,
-        google::protobuf::Closure* done) = 0;
-    virtual void exchange_buffer(
-        mir::protobuf::BufferRequest const* request,
-        mir::protobuf::Buffer* response,
         google::protobuf::Closure* done) = 0;
     virtual void submit_buffer(
         mir::protobuf::BufferRequest const* request,

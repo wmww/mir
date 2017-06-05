@@ -34,7 +34,9 @@ public:
     frontend::ScreencastSessionId create_session(
         geometry::Rectangle const&,
         geometry::Size const&,
-        MirPixelFormat)
+        MirPixelFormat,
+        int,
+        MirMirrorMode)
     {
         return frontend::ScreencastSessionId{1};
     }
@@ -45,6 +47,7 @@ public:
     {
         return nullptr;
     }
+    void capture(frontend::ScreencastSessionId, std::shared_ptr<graphics::Buffer> const&) {}
 };
 
 }

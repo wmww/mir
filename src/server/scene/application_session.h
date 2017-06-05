@@ -32,11 +32,14 @@ namespace mir
 namespace frontend
 {
 class EventSink;
+class ClientBuffers;
 }
 namespace compositor { class BufferStream; }
 namespace graphics
 {
 class DisplayConfiguration;
+class GraphicBufferAllocator;
+class BufferAttribute;
 }
 namespace shell { class SurfaceStack; }
 namespace scene
@@ -47,7 +50,7 @@ class SnapshotStrategy;
 class BufferStreamFactory;
 class SurfaceFactory;
 
-class ApplicationSession : public Session
+class ApplicationSession : public Session, public frontend::SessionExtensions
 {
 public:
     ApplicationSession(
@@ -59,7 +62,8 @@ public:
         std::shared_ptr<SnapshotStrategy> const& snapshot_strategy,
         std::shared_ptr<SessionListener> const& session_listener,
         graphics::DisplayConfiguration const& initial_config,
-        std::shared_ptr<frontend::EventSink> const& sink);
+        std::shared_ptr<frontend::EventSink> const& sink,
+        std::shared_ptr<graphics::GraphicBufferAllocator> const& allocator);
 
     ~ApplicationSession();
 
@@ -77,13 +81,14 @@ public:
     std::string name() const override;
     pid_t process_id() const override;
 
-    void force_requests_to_complete() override;
+    void drop_outstanding_requests() override;
 
     void hide() override;
     void show() override;
 
     void send_display_config(graphics::DisplayConfiguration const& info) override;
-    void send_input_device_change(std::vector<std::shared_ptr<input::Device>> const& devices) override;
+    void send_error(ClientVisibleError const& error) override;
+    void send_input_config(MirInputConfig const& devices) override;
 
     void set_lifecycle_state(MirLifecycleState state) override;
 
@@ -98,6 +103,11 @@ public:
     void configure_streams(Surface& surface, std::vector<shell::StreamSpecification> const& config) override;
     void destroy_surface(std::weak_ptr<Surface> const& surface) override;
 
+    graphics::BufferID create_buffer(graphics::BufferProperties const& properties) override;
+    graphics::BufferID create_buffer(geometry::Size, MirPixelFormat) override;
+    graphics::BufferID create_buffer(geometry::Size, uint32_t native_format, uint32_t native_flags) override;
+    void destroy_buffer(graphics::BufferID) override;
+    std::shared_ptr<graphics::Buffer> get_buffer(graphics::BufferID) override;
 protected:
     ApplicationSession(ApplicationSession const&) = delete;
     ApplicationSession& operator=(ApplicationSession const&) = delete;
@@ -111,6 +121,8 @@ private:
     std::shared_ptr<SnapshotStrategy> const snapshot_strategy;
     std::shared_ptr<SessionListener> const session_listener;
     std::shared_ptr<frontend::EventSink> const event_sink;
+    std::shared_ptr<frontend::ClientBuffers> const buffers;
+    std::shared_ptr<graphics::GraphicBufferAllocator> const gralloc;
 
     frontend::SurfaceId next_id();
 
@@ -125,6 +137,8 @@ private:
     std::mutex mutable surfaces_and_streams_mutex;
     Surfaces surfaces;
     Streams streams;
+
+    std::map<frontend::SurfaceId, frontend::BufferStreamId> default_content_map;
 
     void destroy_surface(std::unique_lock<std::mutex>& lock, Surfaces::const_iterator in_surfaces);
 };

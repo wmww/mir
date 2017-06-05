@@ -24,9 +24,9 @@
 namespace mf = mir::frontend;
 
 mf::ScreencastSessionId mf::UnauthorizedScreencast::create_session(
-    geometry::Rectangle const&,
-    geometry::Size const&,
-    MirPixelFormat)
+    mir::geometry::Rectangle const&,
+    mir::geometry::Size const&,
+    MirPixelFormat, int, MirMirrorMode)
 {
     BOOST_THROW_EXCEPTION(
         std::runtime_error("Process is not authorized to capture screencasts"));
@@ -40,6 +40,12 @@ void mf::UnauthorizedScreencast::destroy_session(mf::ScreencastSessionId)
 
 std::shared_ptr<mir::graphics::Buffer> mf::UnauthorizedScreencast::capture(
     mf::ScreencastSessionId)
+{
+    BOOST_THROW_EXCEPTION(
+        std::runtime_error("Process is not authorized to capture screencasts"));
+}
+
+void mf::UnauthorizedScreencast::capture(mf::ScreencastSessionId, std::shared_ptr<mir::graphics::Buffer> const&)
 {
     BOOST_THROW_EXCEPTION(
         std::runtime_error("Process is not authorized to capture screencasts"));

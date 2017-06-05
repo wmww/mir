@@ -20,7 +20,7 @@
 #ifndef MIR_REPORT_LOGGING_SESSION_MEDIATOR_REPORT_H_
 #define MIR_REPORT_LOGGING_SESSION_MEDIATOR_REPORT_H_
 
-#include "mir/frontend/session_mediator_report.h"
+#include "mir/frontend/session_mediator_observer.h"
 
 #include <memory>
 
@@ -36,7 +36,7 @@ namespace logging
 {
 
 
-class SessionMediatorReport : public frontend::SessionMediatorReport
+class SessionMediatorReport : public frontend::SessionMediatorObserver
 {
 public:
     SessionMediatorReport(std::shared_ptr<mir::logging::Logger> const& log);
@@ -44,10 +44,6 @@ public:
     virtual void session_connect_called(std::string const& app_name) override;
 
     virtual void session_create_surface_called(std::string const& app_name) override;
-
-    virtual void session_next_buffer_called(std::string const& app_name) override;
-
-    virtual void session_exchange_buffer_called(std::string const& app_name) override;
 
     virtual void session_submit_buffer_called(std::string const& app_name) override;
 
@@ -66,6 +62,10 @@ public:
     virtual void session_configure_display_called(std::string const& app_name) override;
 
     virtual void session_set_base_display_configuration_called(std::string const& app_name) override;
+
+    virtual void session_preview_base_display_configuration_called(std::string const& app_name) override;
+
+    virtual void session_confirm_base_display_configuration_called(std::string const& app_name) override;
 
     virtual void session_start_prompt_session_called(std::string const& app_name, pid_t application_process) override;
 

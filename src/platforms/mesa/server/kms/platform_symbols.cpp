@@ -26,6 +26,7 @@
 #include "mir/assert_module_entry_point.h"
 #include "mir/libname.h"
 
+#include <EGL/egl.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
 
@@ -104,7 +105,8 @@ struct RealPosixProcessOperations : public mgm::PosixProcessOperations
 mir::UniqueModulePtr<mg::Platform> create_host_platform(
     std::shared_ptr<mo::Option> const& options,
     std::shared_ptr<mir::EmergencyCleanupRegistry> const& emergency_cleanup_registry,
-    std::shared_ptr<mg::DisplayReport> const& report)
+    std::shared_ptr<mg::DisplayReport> const& report,
+    std::shared_ptr<mir::logging::Logger> const& /*logger*/)
 {
     mir::assert_entry_point_signature<mg::CreateHostPlatform>(&create_host_platform);
     // ensure mesa finds the mesa mir-platform symbols
@@ -161,6 +163,19 @@ mg::PlatformPriority probe_graphics_platform(mo::ProgramOption const& options)
 
     if (drm_devices.begin() == drm_devices.end())
         return mg::PlatformPriority::unsupported;
+
+    // We also require GBM EGL platform
+    auto const* client_extensions = eglQueryString(EGL_NO_DISPLAY, EGL_EXTENSIONS);
+    if (!client_extensions)
+    {
+        // Doesn't support EGL client extensions; Mesa does, so this is unlikely to be mesa.
+        return mg::PlatformPriority::unsupported;
+    }
+    if (strstr(client_extensions, "EGL_MESA_platform_gbm") == nullptr)
+    {
+        // No platform_gbm support, so we can't work.
+        return mg::PlatformPriority::unsupported;
+    }
 
     // Check for master
     int tmp_fd = -1;

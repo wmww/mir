@@ -23,6 +23,7 @@
 
 #include <mir_toolkit/events/event.h>
 #include <mir_toolkit/common.h>
+#include <mir_toolkit/deprecations.h>
 
 #include <stddef.h>
 
@@ -38,14 +39,22 @@ extern "C" {
 typedef void* MirEGLNativeWindowType;
 typedef void* MirEGLNativeDisplayType;
 typedef struct MirConnection MirConnection;
-typedef struct MirSurface MirSurface;
-typedef struct MirSurfaceSpec MirSurfaceSpec;
+typedef struct MirSurface MirSurface MIR_FOR_REMOVAL_IN_VERSION_1("Use MirWindow instead");
+typedef struct MirSurface MirWindow;
+typedef struct MirSurfaceSpec MirSurfaceSpec MIR_FOR_REMOVAL_IN_VERSION_1("Use MirWindowSpec instead");
+typedef struct MirSurfaceSpec MirWindowSpec;
 typedef struct MirScreencast MirScreencast;
+typedef struct MirScreencastSpec MirScreencastSpec;
 typedef struct MirPromptSession MirPromptSession;
 typedef struct MirBufferStream MirBufferStream;
-typedef struct MirPersistentId MirPersistentId;
+typedef struct MirPersistentId MirPersistentId MIR_FOR_REMOVAL_IN_VERSION_1("Use MirWindowId instead");
+typedef struct MirPersistentId MirWindowId;
 typedef struct MirBlob MirBlob;
 typedef struct MirDisplayConfig MirDisplayConfig;
+typedef struct MirError MirError;
+typedef struct MirPresentationChain MirPresentationChain;
+typedef struct MirBuffer MirBuffer;
+typedef struct MirRenderSurface MirRenderSurface;
 
 /**
  * Descriptor for an output connection.
@@ -70,18 +79,18 @@ typedef struct MirPlatformMessage MirPlatformMessage;
  *   \param [in,out] client_context  context provided by client in calling
  *                                   mir_connect
  */
-typedef void (*mir_connected_callback)(MirConnection *connection, void *client_context);
+typedef void (*MirConnectedCallback)(
+    MirConnection *connection, void *client_context);
+typedef MirConnectedCallback mir_connected_callback
+    MIR_FOR_REMOVAL_IN_VERSION_1("Use MirConnectedCallback instead");
 
 /**
- * Callback to be passed when calling:
- *  - mir_connection_create_surface
- *  - mir_surface_swap_buffers
- *  - mir_surface_release
- *   \param [in] surface             the surface being updated
+ * Callback to be passed when calling window functions :
+ *   \param [in] window             the window being updated
  *   \param [in,out] client_context  context provided by client in calling
  *                                   mir_connect
  */
-typedef void (*mir_surface_callback)(MirSurface *surface, void *client_context);
+typedef void (*MirWindowCallback)(MirWindow *window, void *client_context);
 
 /**
  * Callback to be passed when calling:
@@ -90,16 +99,19 @@ typedef void (*mir_surface_callback)(MirSurface *surface, void *client_context);
  *   \param [in,out] client_context  context provided by client in calling
  *                                   mir_connect
  */
-typedef void (*mir_buffer_stream_callback)(MirBufferStream *stream, void *client_context);
+typedef void (*MirBufferStreamCallback)(
+    MirBufferStream *stream, void *client_context);
+typedef MirBufferStreamCallback mir_buffer_stream_callback
+    MIR_FOR_REMOVAL_IN_VERSION_1("Use MirBufferStreamCallback instead");
 
 /**
- * Callback for handling of surface events.
- *   \param [in] surface     The surface on which an event has occurred
+ * Callback for handling of window events.
+ *   \param [in] window     The window on which an event has occurred
  *   \param [in] event       The event to be handled
  *   \param [in,out] context The context provided by client
  */
-typedef void (*mir_surface_event_callback)(
-    MirSurface* surface, MirEvent const* event, void* context);
+typedef void (*MirWindowEventCallback)(
+    MirWindow* window, MirEvent const* event, void* context);
 
 /**
  * Callback called when a lifecycle event/callback is requested
@@ -109,8 +121,10 @@ typedef void (*mir_surface_event_callback)(
  *   \param [in,out] context    The context provided by the client
  */
 
-typedef void (*mir_lifecycle_event_callback)(
+typedef void (*MirLifecycleEventCallback)(
     MirConnection* connection, MirLifecycleState state, void* context);
+typedef MirLifecycleEventCallback mir_lifecycle_event_callback
+    MIR_FOR_REMOVAL_IN_VERSION_1("Use MirLifecycleEventCallback instead");
 
 /**
  * Callback called when the server pings for responsiveness testing.
@@ -119,8 +133,10 @@ typedef void (*mir_lifecycle_event_callback)(
  *                              mir_connection_pong()
  * \param [in,out] context      The context provided by the client
  */
-typedef void (*mir_ping_event_callback)(
+typedef void (*MirPingEventCallback)(
     MirConnection* connection, int32_t serial, void* context);
+typedef MirPingEventCallback mir_ping_event_callback
+    MIR_FOR_REMOVAL_IN_VERSION_1("Use MirPingEventCallback instead");
 
 /**
  * Callback called when a display config change has occurred
@@ -128,8 +144,10 @@ typedef void (*mir_ping_event_callback)(
  *   \param [in,out] context    The context provided by client
  */
 
-typedef void (*mir_display_config_callback)(
+typedef void (*MirDisplayConfigCallback)(
     MirConnection* connection, void* context);
+typedef MirDisplayConfigCallback mir_display_config_callback
+    MIR_FOR_REMOVAL_IN_VERSION_1("Use MirDisplayConfigCallback instead");
 
 /**
  * Callback called when a request for client file descriptors completes
@@ -141,12 +159,16 @@ typedef void (*mir_display_config_callback)(
  *   \note Copy the FDs as the array will be invalidated after callback completes
  */
 
-typedef void (*mir_client_fd_callback)(
+typedef void (*MirClientFdCallback)(
     MirPromptSession *prompt_session, size_t count, int const* fds, void* context);
+typedef MirClientFdCallback mir_client_fd_callback
+    MIR_FOR_REMOVAL_IN_VERSION_1("Use MirClientFdCallback instead");
 
-
-typedef void (*mir_surface_id_callback)(
-    MirSurface* surface, MirPersistentId* id, void* context);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+typedef void (*MirWindowIdCallback)(
+    MirWindow* window, MirPersistentId* id, void* context);
+#pragma GCC diagnostic pop
 
 /**
  * MirBufferUsage specifies how a surface can and will be used. A "hardware"
@@ -160,8 +182,8 @@ typedef enum MirBufferUsage
 } MirBufferUsage;
 
 /**
- * MirSurfaceParameters is the structure of minimum required information that
- * you must provide to Mir in order to create a surface.
+ * MirWindowParameters is the structure of minimum required information that
+ * you must provide to Mir in order to create a window.
  */
 typedef struct MirSurfaceParameters
 {
@@ -179,7 +201,7 @@ typedef struct MirSurfaceParameters
      * use the value mir_display_output_id_invalid.
      */
     uint32_t output_id;
-} MirSurfaceParameters;
+} MirSurfaceParameters MIR_FOR_REMOVAL_IN_VERSION_1("Use mir_window_get apis or listen for attribute events instead");
 
 enum { mir_platform_package_max = 32 };
 
@@ -192,12 +214,13 @@ enum { mir_platform_package_max = 32 };
  * \todo This should be removed from the public API at the next API break.
  */
 #ifndef __cplusplus
-__attribute__ ((deprecated))
+MIR_FOR_REMOVAL_IN_VERSION_1("Use of this type is inherently non-portable")
 #endif
 typedef enum MirPlatformType
 {
     mir_platform_type_gbm,
-    mir_platform_type_android
+    mir_platform_type_android,
+    mir_platform_type_eglstream,
 } MirPlatformType;
 
 typedef struct MirPlatformPackage
@@ -225,8 +248,23 @@ typedef struct MirModuleProperties
     char const *filename;
 } MirModuleProperties;
 
+typedef enum MirBufferLayout
+{
+    mir_buffer_layout_unknown = 0,
+    mir_buffer_layout_linear  = 1,
+} MirBufferLayout;
+
+typedef enum MirPresentMode
+{
+    mir_present_mode_immediate, //same as VK_PRESENT_MODE_IMMEDIATE_KHR
+    mir_present_mode_mailbox, //same as VK_PRESENT_MODE_MAILBOX_KHR
+    mir_present_mode_fifo, //same as VK_PRESENT_MODE_FIFO_KHR
+    mir_present_mode_fifo_relaxed, //same as VK_PRESENT_MODE_FIFO_RELAXED_KHR
+    mir_present_mode_num_modes
+} MirPresentMode;
+
 /**
- * Retrieved information about a MirSurface. This is most useful for learning
+ * Retrieved information about a MirWindow. This is most useful for learning
  * how and where to write to a 'mir_buffer_usage_software' surface.
  */
 typedef struct MirGraphicsRegion
@@ -264,41 +302,25 @@ typedef struct MirDisplayCard
 
 typedef enum MirDisplayOutputType
 {
-    mir_display_output_type_unknown,
-    mir_display_output_type_vga,
-    mir_display_output_type_dvii,
-    mir_display_output_type_dvid,
-    mir_display_output_type_dvia,
-    mir_display_output_type_composite,
-    mir_display_output_type_svideo,
-    mir_display_output_type_lvds,
-    mir_display_output_type_component,
-    mir_display_output_type_ninepindin,
-    mir_display_output_type_displayport,
-    mir_display_output_type_hdmia,
-    mir_display_output_type_hdmib,
-    mir_display_output_type_tv,
-    mir_display_output_type_edp
+    mir_display_output_type_unknown     = mir_output_type_unknown,
+    mir_display_output_type_vga         = mir_output_type_vga,
+    mir_display_output_type_dvii        = mir_output_type_dvii,
+    mir_display_output_type_dvid        = mir_output_type_dvid,
+    mir_display_output_type_dvia        = mir_output_type_dvia,
+    mir_display_output_type_composite   = mir_output_type_composite,
+    mir_display_output_type_svideo      = mir_output_type_svideo,
+    mir_display_output_type_lvds        = mir_output_type_lvds,
+    mir_display_output_type_component   = mir_output_type_component,
+    mir_display_output_type_ninepindin  = mir_output_type_ninepindin,
+    mir_display_output_type_displayport = mir_output_type_displayport,
+    mir_display_output_type_hdmia       = mir_output_type_hdmia,
+    mir_display_output_type_hdmib       = mir_output_type_hdmib,
+    mir_display_output_type_tv          = mir_output_type_tv,
+    mir_display_output_type_edp         = mir_output_type_edp,
+    mir_display_output_type_virtual     = mir_output_type_virtual,
+    mir_display_output_type_dsi         = mir_output_type_dsi,
+    mir_display_output_type_dpi         = mir_output_type_dpi,
 } MirDisplayOutputType;
-
-typedef enum MirOutputType
-{
-    mir_output_type_unknown,
-    mir_output_type_vga,
-    mir_output_type_dvii,
-    mir_output_type_dvid,
-    mir_output_type_dvia,
-    mir_output_type_composite,
-    mir_output_type_svideo,
-    mir_output_type_lvds,
-    mir_output_type_component,
-    mir_output_type_ninepindin,
-    mir_output_type_displayport,
-    mir_output_type_hdmia,
-    mir_output_type_hdmib,
-    mir_output_type_tv,
-    mir_output_type_edp
-} MirOutputType;
 
 typedef enum MirOutputConnectionState
 {
@@ -372,6 +394,8 @@ typedef struct MirRectangle
 
 typedef struct MirInputConfig MirInputConfig;
 typedef struct MirInputDevice MirInputDevice;
+typedef struct MirPointerConfig MirPointerConfig;
+typedef struct MirTouchpadConfig MirTouchpadConfig;
 
 /**
  * MirScreencastParameters is the structure of required information that
@@ -402,14 +426,20 @@ typedef struct MirScreencastParameters
  *   \param [in] screencast          the screencast being updated
  *   \param [in,out] client_context  context provided by the client
  */
-typedef void (*mir_screencast_callback)(MirScreencast *screencast, void *client_context);
+typedef void (*MirScreencastCallback)(
+    MirScreencast *screencast, void *client_context);
+typedef MirScreencastCallback mir_screencast_callback
+    MIR_FOR_REMOVAL_IN_VERSION_1("Use MirScreencastCallback instead");
 
 /**
  * Callback member of MirPromptSession for handling of prompt sessions.
  *   \param [in] prompt_provider  The prompt session associated with the callback
  *   \param [in,out] context      The context provided by the client
  */
-typedef void (*mir_prompt_session_callback)(MirPromptSession* prompt_provider, void* context);
+typedef void (*MirPromptSessionCallback)(
+    MirPromptSession* prompt_provider, void* context);
+typedef MirPromptSessionCallback mir_prompt_session_callback
+    MIR_FOR_REMOVAL_IN_VERSION_1("Use MirPromptSessionCallback instead");
 
 /**
  * Callback member of MirPromptSession for handling of prompt sessions events.
@@ -417,8 +447,12 @@ typedef void (*mir_prompt_session_callback)(MirPromptSession* prompt_provider, v
  *   \param [in] state            The state of the prompt session
  *   \param [in,out] context      The context provided by the client
  */
-typedef void (*mir_prompt_session_state_change_callback)(
-    MirPromptSession* prompt_provider, MirPromptSessionState state, void* context);
+typedef void (*MirPromptSessionStateChangeCallback)(
+    MirPromptSession* prompt_provider, MirPromptSessionState state,
+    void* context);
+typedef MirPromptSessionStateChangeCallback
+        mir_prompt_session_state_change_callback
+    MIR_FOR_REMOVAL_IN_VERSION_1("Use MirPromptSessionStateChangeCallback instead");
 
 /**
  * Callback called when a platform operation completes.
@@ -430,8 +464,10 @@ typedef void (*mir_prompt_session_state_change_callback)(
  *   \param [in] reply        The platform operation reply
  *   \param [in,out] context  The context provided by the client
  */
-typedef void (*mir_platform_operation_callback)(
+typedef void (*MirPlatformOperationCallback)(
     MirConnection* connection, MirPlatformMessage* reply, void* context);
+typedef MirPlatformOperationCallback mir_platform_operation_callback
+    MIR_FOR_REMOVAL_IN_VERSION_1("Use MirPlatformOperationCallback instead");
 
 /**
  * Callback called when a change of input devices has occurred
@@ -440,8 +476,88 @@ typedef void (*mir_platform_operation_callback)(
  *   \param [in,out] context  The context provided by client
  */
 
-typedef void (*mir_input_config_callback)(
+typedef void (*MirInputConfigCallback)(
     MirConnection* connection, void* context);
+typedef MirInputConfigCallback mir_input_config_callback
+    MIR_FOR_REMOVAL_IN_VERSION_1("Use MirInputConfigCallback instead");
+
+typedef void (*MirBufferCallback)(MirBuffer*, void* context);
+
+/**
+ * Specifies the origin of an error.
+ *
+ * This is required to interpret the other aspects of a MirError.
+ */
+typedef enum MirErrorDomain
+{
+    /**
+     * Errors relating to display configuration.
+     *
+     * Associated error codes are found in \ref MirDisplayConfigurationError.
+     */
+    mir_error_domain_display_configuration,
+    /**
+     * Errors relating to input configuration.
+     *
+     * Associated error codes are found in \ref MirInputConfigurationError.
+     */
+    mir_error_domain_input_configuration,
+} MirErrorDomain;
+
+/**
+ * Errors from the \ref mir_error_domain_display_configuration \ref MirErrorDomain
+ */
+typedef enum MirDisplayConfigurationError {
+    /**
+     * Client is not permitted to change global display configuration
+     */
+    mir_display_configuration_error_unauthorized,
+    /**
+     * A global configuration change request is already pending
+     */
+    mir_display_configuration_error_in_progress,
+    /**
+     * A cancel request was received, but no global display configuration preview is in progress
+     */
+    mir_display_configuration_error_no_preview_in_progress,
+    /**
+     * Display configuration was attempted but was rejected by the hardware
+     */
+     mir_display_configuration_error_rejected_by_hardware
+} MirDisplayConfigurationError;
+
+/**
+ * Errors from the \ref mir_error_domain_input_configuration \ref MirErrorDomain
+ */
+typedef enum MirInputConfigurationError {
+    /**
+     * Input configuration was attempted but was rejected by driver
+     */
+     mir_input_configuration_error_rejected_by_driver
+} MirInputConfigurationError;
+
+typedef void (*MirErrorCallback)(
+    MirConnection* connection, MirError const* error, void* context);
+typedef MirErrorCallback mir_error_callback
+    MIR_FOR_REMOVAL_IN_VERSION_1("Use MirErrorCallback instead");
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+
+typedef void (*mir_surface_callback)(MirSurface *surface, void *client_context)
+MIR_FOR_REMOVAL_IN_VERSION_1("Use MirWindowCallback instead");
+
+typedef void (*mir_surface_event_callback)(
+    MirSurface* surface, MirEvent const* event, void* context)
+MIR_FOR_REMOVAL_IN_VERSION_1("Use MirWindowEventCallback instead");
+
+typedef void (*mir_surface_id_callback)(
+    MirSurface* surface, MirPersistentId* id, void* context)
+MIR_FOR_REMOVAL_IN_VERSION_1("Use MirWindowIdCallback instead");
+
+typedef MirSurfaceParameters MirWindowParameters;
+
+#pragma GCC diagnostic pop
 
 #ifdef __cplusplus
 }

@@ -20,6 +20,7 @@
 #define MIR_TOOLKIT_MIR_DISPLAY_CONFIGURATION_H_
 
 #include "client_types.h"
+#include <mir_toolkit/deprecations.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -59,7 +60,8 @@ void mir_display_config_release(MirDisplayConfig* config);
  *               supportable at this time.
  */
 int mir_display_config_get_max_simultaneous_outputs(
-    MirDisplayConfig const* config);
+    MirDisplayConfig const* config)
+    MIR_FOR_REMOVAL_IN_VERSION_1("Not accurate in Mir 0.26 and later. May be removed in future.");
 
 /**
  * Get the number of outputs available in this display configuration.
@@ -90,6 +92,19 @@ int mir_display_config_get_num_outputs(MirDisplayConfig const* config);
  *              until mir_display_config_release(config) is called.
  */
 MirOutput const* mir_display_config_get_output(MirDisplayConfig const* config,
+    size_t index);
+
+/**
+ * Get a modifyable handle to the index 'th output of this configuration
+ *
+ * \note The MirOutput handle is only valid while config is valid.
+ * \pre 0 <= index < mir_display_config_get_num_outputs(config)
+ * \param [in]  config  The configuration to query
+ * \param [in]  index   The index of the output to get
+ * \returns     A handle to a MirOutput within config which is valid
+ *              until mir_display_config_release(config) is called.
+ */
+MirOutput* mir_display_config_get_mutable_output(MirDisplayConfig* config,
     size_t index);
 
 /**
@@ -138,6 +153,21 @@ MirOutputMode const* mir_output_get_mode(MirOutput const* output, size_t index);
 MirOutputMode const* mir_output_get_preferred_mode(MirOutput const* output);
 
 /**
+ * Get the index of the output's preferred mode.
+ *
+ * This is provided by the output itself. For modern displays (LCD, OLED, etc)
+ * it is typically a mode with the native resolution.
+ *
+ * An output may not have a preferred mode, in which case this call will return
+ * (size_t)-1.
+ *
+ * \param [in]  output  The MirOutput to query
+ * \returns     The index of the output's preferred mode, if it has one, or
+ *              (size_t)-1 if output does not have a preferred mode.
+ */
+size_t mir_output_get_preferred_mode_index(MirOutput const* output);
+
+/**
  * Get a handle to the output's current mode.
  *
  * An output may not have a current mode (for example, if it is disabled), in
@@ -151,6 +181,26 @@ MirOutputMode const* mir_output_get_preferred_mode(MirOutput const* output);
  *              current mode, it returns NULL.
  */
 MirOutputMode const* mir_output_get_current_mode(MirOutput const* output);
+
+/**
+ * Get the index of to the output's current mode.
+ *
+ * An output may not have a current mode (for example, if it is disabled), in
+ * which case this call will return (size_t)-1.
+ *
+ * \param [in]  output  The MirOutput to query
+ * \returns     The index of the output's current mode, if it has one, or
+ *              (size_t)-1 if output does not have a current mode.
+ */
+size_t mir_output_get_current_mode_index(MirOutput const* output);
+
+/**
+ * Set the current mode of an output.
+ *
+ * \param [in]  output  The MirOutput to mutate
+ * \param [in]  mode    The MirOutputMode to set as the current mode.
+ */
+void mir_output_set_current_mode(MirOutput* output, MirOutputMode const* mode);
 
 /**
  * Get the number of pixel formats supported by this output
@@ -193,7 +243,7 @@ void mir_output_set_pixel_format(MirOutput* output, MirPixelFormat format);
  * Get the ID of an output
  *
  * This can be used to refer to the output in other parts of the API, such as
- * mir_surface_spec_set_fullscreen_on_output().
+ * mir_window_spec_set_fullscreen_on_output().
  *
  * \param [in]  output  The MirOutput to query.
  * \returns     The ID of output, which may be used to refer to it in other
@@ -211,6 +261,23 @@ int mir_output_get_id(MirOutput const* output);
  *              if it cannot be determined.
  */
 MirOutputType mir_output_get_type(MirOutput const* output);
+
+/**
+ * Get the textual name of an output type.
+ *
+ * \param [in]  type  The MirDisplayOutputType to describe.
+ * \returns           The name of the output type.
+ */
+char const* mir_display_output_type_name(MirDisplayOutputType type)
+MIR_FOR_REMOVAL_IN_VERSION_1("use mir_output_type_name instead");
+
+/**
+ * Get the textual name of an output type.
+ *
+ * \param [in]  type  The MirOutputType to describe.
+ * \returns           The name of the output type.
+ */
+char const* mir_output_type_name(MirOutputType type);
 
 /**
  * Get the x coordinate of the top-left point of the output in the virtual
@@ -245,6 +312,24 @@ int mir_output_get_position_x(MirOutput const* output);
 int mir_output_get_position_y(MirOutput const* output);
 
 /**
+ * Set the coordinates of the top-left point of the output in the virtual
+ * display space.
+ *
+ * Outputs can be thought of as viewports into a virtual display space. They may
+ * freely overlap, coincide, or be disjoint as desired.
+ *
+ * Output orientation changes the orientation of the output rectangle in virtual
+ * display space, but does not change its top-left corner.
+ *
+ * \param [in]  output  The MirOutput to mutate
+ * \param [in]  x       The new x coordinate of the top-left point of the
+ *                      output in virtual display space.
+ * \param [in]  y       The new y coordinate of the top-left point of the
+ *                      output in virtual display space.
+ */
+void mir_output_set_position(MirOutput* output, int x, int y);
+
+/**
  * Get whether there is a display physically connected to the output.
  *
  * This gives a best-effort determination of whether or not enabling this output
@@ -275,6 +360,32 @@ MirOutputConnectionState mir_output_get_connection_state(
  * \returns     Whether the output is enabled.
  */
 bool mir_output_is_enabled(MirOutput const* output);
+
+/**
+ * Enable this output
+ *
+ * \param [in]  output  the MirOutput to enable
+ */
+void mir_output_enable(MirOutput* output);
+
+/**
+ * Disable this output
+ *
+ * \param [in]  output  the MirOutput to disable
+ */
+void mir_output_disable(MirOutput* output);
+
+/**
+ * Get a descriptive manufacturer/model string for the connected display.
+ * The format of this string is arbitrary and driver-specific but should be
+ * human-readable and helpful for someone to identify which physical display
+ * this is. Note this function is not called get_name because that would imply
+ * the returned value is different for each output, whereas it may not be.
+ *
+ * \returns  A nul-terminated string or NULL if none available. This string
+ *           remains valid for the lifetime of the MirOutput object.
+ */
+char const* mir_output_get_model(MirOutput const* output);
 
 /**
  * Get the physical width of the connected display, in millimetres.
@@ -318,12 +429,30 @@ int mir_output_get_physical_height_mm(MirOutput const* output);
 MirPowerMode mir_output_get_power_mode(MirOutput const* output);
 
 /**
+ * Set the power state of a connected display.
+ *
+ * It is undefined what power state is set if the output is not connected.
+ *
+ * \param [in]  output  The MirOutput to mutate
+ * \param [in]  mode    The new MirPowerMode for output
+ */
+void mir_output_set_power_mode(MirOutput* output, MirPowerMode mode);
+
+/**
  * Get the orientation of a display.
  *
  * \param [in]  output  The MirOutput to query
  * \returns     The orientation of output
  */
 MirOrientation mir_output_get_orientation(MirOutput const* output);
+
+/**
+ * Set the orientation of a display.
+ *
+ * \param [in]  output          The MirOutput to mutate
+ * \param [in]  orientation     The new MirOrientation for output
+ */
+void mir_output_set_orientation(MirOutput* output, MirOrientation orientation);
 
 /**
  * Get the scale-factor of a display
@@ -342,6 +471,15 @@ MirOrientation mir_output_get_orientation(MirOutput const* output);
 float mir_output_get_scale_factor(MirOutput const* output);
 
 /**
+ * Get the subpixel arrangement of a display
+ *
+ * \param [in]  output  The MirOutput to query
+ * \returns     The MirSubpixelArrangement corresponding to the physical arrangement of subpixels
+ *              on this display, or mir_subpixel_arrangement_unknown if this cannot be determined.
+ */
+MirSubpixelArrangement mir_output_get_subpixel_arrangement(MirOutput const* output);
+
+/**
  * Get the form-factor of a connected output.
  *
  * This call succeeds even if the output is not connected, but may return nonsense values.
@@ -350,6 +488,90 @@ float mir_output_get_scale_factor(MirOutput const* output);
  * \returns     The form factor of this output
  */
 MirFormFactor mir_output_get_form_factor(MirOutput const* output);
+
+/** Gets if the platform supports gamma correction
+ *
+ * \param [in]  output  The MirOutput to query
+ * \returns     true if gamma is supported on the hardware, otherwise not supported
+ */
+bool mir_output_is_gamma_supported(MirOutput const* client_output);
+
+/** Gets the gamma size
+ *
+ * \param [in]  output  The MirOutput to query
+ * \returns     The size of the gamma ramp LUT
+ *
+ */
+uint32_t mir_output_get_gamma_size(MirOutput const* client_output);
+
+/** Get the gamma ramp of a display
+ *
+ * Copies the gammas into user created buffers up to the size provided
+ *
+ * \param [in]  output  The MirOutput to query
+ * \param [out] red     The red gamma ramp
+ * \param [out] green   The green gamma ramp
+ * \param [out] blue    The blue gamma ramp
+ * \param [in]  size    The size of the gamma ramp
+ */
+void mir_output_get_gamma(MirOutput const* client_output,
+                          uint16_t* red,
+                          uint16_t* green,
+                          uint16_t* blue,
+                          uint32_t  size);
+
+/** Set the gamma ramp of a display
+ *
+ * \param [in]  output  The MirOutput to query
+ * \param [in]  red     The red gamma ramp
+ * \param [in]  green   The green gamma ramp
+ * \param [in]  blue    The blue gamma ramp
+ * \param [in]  size    The size of the gamma ramp
+ */
+void mir_output_set_gamma(MirOutput* client_output,
+                          uint16_t const* red,
+                          uint16_t const* green,
+                          uint16_t const* blue,
+                          uint32_t  size);
+
+/**
+ * Set the scale-factor of a display
+ *
+ * The scale-factor specifies the conversion between logical pixels and physical
+ * pixels on this output. See mir_output_get_scale_factor for further details.
+ *
+ * \param [in]  output  The MirOutput to modify
+ * \param [in]  scale   The scale factor
+ */
+void mir_output_set_scale_factor(MirOutput* output, float scale);
+
+/**
+ * Get the raw EDID data of a display.
+ *
+ * This returns a pointer to the start of the raw, unparsed EDID data.
+ * Some displays or connection types may not provide EDID data. In that case,
+ * this returns NULL.
+ *
+ * An EDID is always at least 128 bytes, but may be longer in the presence of extensions.
+ *
+ * \param [in]  output  The MirOutput to query
+ * \returns     A pointer to the start of the raw EDID data.
+ *              This pointer remains valid as long as the MirOutput remains valid.
+ *              Returns NULL if there is no EDID available.
+ */
+uint8_t const* mir_output_get_edid(MirOutput const* output);
+
+/**
+ * Get the size of the EDID of this display.
+ *
+ * If the EDID is unavailable for some reason this returns 0.
+ *
+ * An EDID is always at least 128 bytes, but may be longer in the presence of extensions.
+ *
+ * \param [in]  output  The MirOutput to query
+ * \returns     The size of the data pointed to by mir_output_get_edid(output).
+ */
+size_t mir_output_get_edid_size(MirOutput const* output);
 
 /**
  * Get the width, in pixels, of a MirOutputMode

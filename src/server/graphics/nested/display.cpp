@@ -20,31 +20,33 @@
 #include "nested_display_configuration.h"
 #include "display_buffer.h"
 #include "host_connection.h"
+#include "host_stream.h"
 
 #include "mir/geometry/rectangle.h"
 #include "mir/graphics/pixel_format_utils.h"
-#include "mir/graphics/gl_context.h"
 #include "mir/graphics/surfaceless_egl_context.h"
 #include "mir/graphics/display_configuration_policy.h"
 #include "mir/graphics/overlapping_output_grouping.h"
 #include "mir/graphics/gl_config.h"
 #include "mir/graphics/egl_error.h"
 #include "mir/graphics/virtual_output.h"
+#include "mir/graphics/buffer_properties.h"
 #include "mir_toolkit/mir_connection.h"
 #include "mir/raii.h"
 
 #include <boost/throw_exception.hpp>
 #include <stdexcept>
-#include <sstream>
+#include <algorithm>
 
-namespace mi = mir::input;
 namespace mg = mir::graphics;
 namespace mgn = mir::graphics::nested;
 namespace geom = mir::geometry;
 
 EGLint const mgn::detail::nested_egl_context_attribs[] =
 {
+#if MIR_SERVER_EGL_OPENGL_BIT == EGL_OPENGL_ES2_BIT
     EGL_CONTEXT_CLIENT_VERSION, 2,
+#endif
     EGL_NONE
 };
 
@@ -86,14 +88,15 @@ void mgn::detail::EGLDisplayHandle::initialize(MirPixelFormat format)
         BOOST_THROW_EXCEPTION(mg::egl_error("Nested Mir Display Error: Failed to initialize EGL."));
     }
 
+    eglBindAPI(MIR_SERVER_EGL_OPENGL_API);
     pixel_format = format;
-    egl_context_ = eglCreateContext(egl_display, choose_windowed_es_config(format), EGL_NO_CONTEXT, detail::nested_egl_context_attribs);
+    egl_context_ = eglCreateContext(egl_display, choose_windowed_config(format), EGL_NO_CONTEXT, detail::nested_egl_context_attribs);
 
     if (egl_context_ == EGL_NO_CONTEXT)
         BOOST_THROW_EXCEPTION(mg::egl_error("Failed to create shared EGL context"));
 }
 
-EGLConfig mgn::detail::EGLDisplayHandle::choose_windowed_es_config(MirPixelFormat format) const
+EGLConfig mgn::detail::EGLDisplayHandle::choose_windowed_config(MirPixelFormat format) const
 {
     EGLint const nested_egl_config_attribs[] =
     {
@@ -104,7 +107,7 @@ EGLConfig mgn::detail::EGLDisplayHandle::choose_windowed_es_config(MirPixelForma
         EGL_ALPHA_SIZE, mg::alpha_channel_depth(format),
         EGL_DEPTH_SIZE, gl_config->depth_buffer_bits(),
         EGL_STENCIL_SIZE, gl_config->stencil_buffer_bits(),
-        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
+        EGL_RENDERABLE_TYPE, MIR_SERVER_EGL_OPENGL_BIT,
         EGL_NONE
     };
     EGLConfig result;
@@ -122,7 +125,7 @@ EGLContext mgn::detail::EGLDisplayHandle::egl_context() const
     return egl_context_;
 }
 
-std::unique_ptr<mg::GLContext> mgn::detail::EGLDisplayHandle::create_gl_context()
+std::unique_ptr<mir::renderer::gl::Context> mgn::detail::EGLDisplayHandle::create_gl_context()
 {
     EGLint const attribs[] =
     {
@@ -133,7 +136,7 @@ std::unique_ptr<mg::GLContext> mgn::detail::EGLDisplayHandle::create_gl_context(
        EGL_ALPHA_SIZE, mg::alpha_channel_depth(pixel_format),
        EGL_DEPTH_SIZE, gl_config->depth_buffer_bits(),
        EGL_STENCIL_SIZE, gl_config->stencil_buffer_bits(),
-       EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
+       EGL_RENDERABLE_TYPE, MIR_SERVER_EGL_OPENGL_BIT,
        EGL_NONE
     };
     return std::make_unique<SurfacelessEGLContext>(egl_display, attribs, EGL_NO_CONTEXT);
@@ -173,20 +176,56 @@ geom::Rectangle mgn::detail::DisplaySyncGroup::view_area() const
     return output->view_area();
 }
 
+namespace
+{
+long area_of(geom::Rectangle const& rect)
+{
+    return static_cast<long>(rect.size.width.as_int())*rect.size.height.as_int();
+}
+
+std::vector<mg::DisplayConfigurationOutput> calculate_best_outputs(
+    mg::DisplayConfiguration const& conf)
+{
+    std::vector<mg::DisplayConfigurationOutput> result;
+
+    mg::OverlappingOutputGrouping unique_outputs{conf};
+
+    unique_outputs.for_each_group(
+        [&](mg::OverlappingOutputGroup const& group)
+        {
+            geom::Rectangle const area = group.bounding_rectangle();
+
+            long max_overlap_area = 0;
+            mg::DisplayConfigurationOutput best_output;
+
+            group.for_each_output(
+                [&](mg::DisplayConfigurationOutput const& output)
+                {
+                    if (area_of(area.intersection_with(output.extents())) > max_overlap_area)
+                    {
+                        max_overlap_area = area_of(area.intersection_with(output.extents()));
+                        best_output = output;
+                    }
+                });
+            result.push_back(best_output);
+        });
+
+    return result;
+}
+}
+
 mgn::Display::Display(
     std::shared_ptr<mg::Platform> const& platform,
     std::shared_ptr<HostConnection> const& connection,
-    std::shared_ptr<input::InputDispatcher> const& dispatcher,
     std::shared_ptr<mg::DisplayReport> const& display_report,
     std::shared_ptr<mg::DisplayConfigurationPolicy> const& initial_conf_policy,
     std::shared_ptr<mg::GLConfig> const& gl_config,
-    std::shared_ptr<mi::CursorListener> const& cursor_listener) :
+    PassthroughOption passthrough_option) :
     platform{platform},
     connection{connection},
-    dispatcher{dispatcher},
     display_report{display_report},
     egl_display{connection->egl_native_display(), gl_config},
-    cursor_listener{cursor_listener},
+    passthrough_option(passthrough_option),
     outputs{},
     current_configuration(std::make_unique<NestedDisplayConfiguration>(connection->create_display_config()))
 {
@@ -200,11 +239,12 @@ mgn::Display::Display(
         swap(current_configuration, conf);
     }
 
-    create_surfaces(*current_configuration);
+    create_surfaces(calculate_best_outputs(*current_configuration));
 }
 
 mgn::Display::~Display() noexcept
 {
+    eglBindAPI(MIR_SERVER_EGL_OPENGL_API);
     if (eglGetCurrentContext() == egl_display.egl_context())
         eglMakeCurrent(egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
 }
@@ -232,95 +272,57 @@ void mgn::Display::complete_display_initialization(MirPixelFormat format)
 
 void mgn::Display::configure(mg::DisplayConfiguration const& configuration)
 {
+    if (!configuration.valid())
+    {
+        BOOST_THROW_EXCEPTION(std::logic_error("Invalid or inconsistent display configuration"));
+    }
+
     decltype(current_configuration) new_config{dynamic_cast<NestedDisplayConfiguration*>(configuration.clone().release())};
 
     {
         std::lock_guard<std::mutex> lock(configuration_mutex);
 
         swap(current_configuration, new_config);
-        create_surfaces(*current_configuration);
+        create_surfaces(calculate_best_outputs(*current_configuration));
     }
 
     connection->apply_display_config(**current_configuration);
 }
 
-namespace
+void mgn::Display::create_surfaces(std::vector<mg::DisplayConfigurationOutput> const& output_list)
 {
-long area_of(geom::Rectangle const& rect)
-{
-    return static_cast<long>(rect.size.width.as_int())*rect.size.height.as_int();
-}
-}
-
-void mgn::Display::create_surfaces(mg::DisplayConfiguration const& configuration)
-{
-    if (!configuration.valid())
-    {
-        BOOST_THROW_EXCEPTION(std::logic_error("Invalid or inconsistent display configuration"));
-    }
-
     decltype(outputs) result;
-    OverlappingOutputGrouping unique_outputs{configuration};
+    for (auto const& output : output_list)
+    {
+        auto const& egl_config_format = output.current_format;
+        geometry::Rectangle const& extents = output.extents();
 
-    unique_outputs.for_each_group(
-        [&](mg::OverlappingOutputGroup const& group)
+        auto& display_buffer = result[output.id];
+
         {
-            geometry::Rectangle const area = group.bounding_rectangle();
+            std::unique_lock<std::mutex> lock(outputs_mutex);
+            display_buffer = outputs[output.id];
+        }
 
-            long max_overlap_area = 0;
-            mg::DisplayConfigurationOutput best_output;
+        if (display_buffer)
+        {
+            if (display_buffer->view_area() != extents)
+                display_buffer.reset();
+        }
 
-            group.for_each_output([&](mg::DisplayConfigurationOutput const& output)
-                {
-                    if (area_of(area.intersection_with(output.extents())) > max_overlap_area)
-                    {
-                        max_overlap_area = area_of(area.intersection_with(output.extents()));
-                        best_output = output;
-                    }
-                });
+        if (!display_buffer)
+        {
+            complete_display_initialization(egl_config_format);
 
-            auto const& egl_config_format = best_output.current_format;
-            geometry::Rectangle const& extents = best_output.extents();
-
-            auto& display_buffer = result[best_output.id];
-
-            {
-                std::unique_lock<std::mutex> lock(outputs_mutex);
-                display_buffer = outputs[best_output.id];
-            }
-
-            if (display_buffer)
-            {
-                if (display_buffer->view_area() != extents)
-                    display_buffer.reset();
-            }
-
-            if (!display_buffer)
-            {
-                complete_display_initialization(egl_config_format);
-
-                std::ostringstream surface_title;
-
-                surface_title << "Mir nested display for output #" << best_output.id.as_value();
-
-                auto const host_surface = connection->create_surface(
-                    extents.size.width.as_int(),
-                    extents.size.height.as_int(),
-                    egl_config_format,
-                    surface_title.str().c_str(),
-                    mir_buffer_usage_hardware,
-                    static_cast<uint32_t>(best_output.id.as_value()));
-
-                display_buffer = std::make_shared<mgn::detail::DisplaySyncGroup>(
-                    std::make_shared<mgn::detail::DisplayBuffer>(
-                        egl_display,
-                        host_surface,
-                        extents,
-                        dispatcher,
-                        cursor_listener,
-                        best_output.current_format));
-            }
-        });
+            eglBindAPI(MIR_SERVER_EGL_OPENGL_API);
+            display_buffer = std::make_shared<mgn::detail::DisplaySyncGroup>(
+                std::make_shared<mgn::detail::DisplayBuffer>(
+                    egl_display,
+                    output,
+                    connection,
+                    passthrough_option));
+        }
+    }
 
     {
         std::unique_lock<std::mutex> lock(outputs_mutex);
@@ -367,12 +369,74 @@ auto mgn::Display::create_hardware_cursor(std::shared_ptr<mg::CursorImage> const
     // So we can't do this: return std::make_shared<Cursor>(connection, initial_image);
 }
 
-std::unique_ptr<mg::GLContext> mgn::Display::create_gl_context()
+std::unique_ptr<mg::VirtualOutput> mgn::Display::create_virtual_output(int /*width*/, int /*height*/)
+{
+    return nullptr;
+}
+
+mg::NativeDisplay* mgn::Display::native_display()
+{
+    return this;
+}
+
+std::unique_ptr<mir::renderer::gl::Context> mgn::Display::create_gl_context()
 {
     return egl_display.create_gl_context();
 }
 
-std::unique_ptr<mg::VirtualOutput> mgn::Display::create_virtual_output(int /*width*/, int /*height*/)
+bool mgn::Display::apply_if_configuration_preserves_display_buffers(
+    mg::DisplayConfiguration const& conf)
 {
-    return nullptr;
+    auto new_outputs = calculate_best_outputs(conf);
+    {
+        std::lock_guard<decltype(configuration_mutex)> lock{configuration_mutex};
+
+        {
+            std::lock_guard<decltype(outputs_mutex)> outputs_lock{outputs_mutex};
+            for (auto const existing_output : outputs)
+            {
+                // O(n²) here, but n < 10 and this is isn't a hot path.
+                if (!std::any_of(
+                    new_outputs.begin(),
+                    new_outputs.end(),
+                [id = existing_output.first](auto const&output) { return output.id == id; }))
+                {
+                    // At least one of the existing outputs isn't used in the ne
+                    return false;
+                }
+            }
+
+            for (auto const& output : new_outputs)
+            {
+                auto existing_output = outputs.find(output.id);
+
+                /*
+                 * If there's no existing output associated with this ID then we can't be
+                 * invalidating its DisplayBuffer.
+                 *
+                 * If there *is* an existing output associated with this ID then
+                 * create_surfaces() will invalidate its DisplayBuffer if and only if
+                 * the viewport doesn't exactly match.
+                 */
+                if (existing_output != outputs.end() &&
+                    existing_output->second->view_area() != output.extents())
+                {
+                    return false;
+                }
+            }
+        }
+
+        current_configuration =
+            decltype(current_configuration){dynamic_cast<NestedDisplayConfiguration*>(conf.clone().release())};
+
+        create_surfaces(new_outputs);
+    }
+    connection->apply_display_config(**current_configuration);
+
+    return true;
+}
+
+mg::Frame mgn::Display::last_frame_on(unsigned) const
+{
+    return {}; // TODO after the client API exists for us to get it
 }
