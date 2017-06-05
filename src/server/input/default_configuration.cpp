@@ -19,10 +19,10 @@
 #include "mir/default_server_configuration.h"
 
 #include "android/input_sender.h"
-#include "android/input_channel_factory.h"
 #include "key_repeat_dispatcher.h"
 #include "display_input_region.h"
 #include "event_filter_chain_dispatcher.h"
+#include "channel_factory.h"
 #include "cursor_controller.h"
 #include "touchspot_controller.h"
 #include "null_input_manager.h"
@@ -34,11 +34,13 @@
 #include "default_input_manager.h"
 #include "surface_input_dispatcher.h"
 #include "basic_seat.h"
-#include "../graphics/nested/mir_client_host_connection.h"
+#include "seat_observer_multiplexer.h"
+#include "../graphics/nested/input_platform.h"
 
 #include "mir/input/touch_visualizer.h"
 #include "mir/input/input_probe.h"
 #include "mir/input/platform.h"
+#include "mir/input/xkb_mapper.h"
 #include "mir/options/configuration.h"
 #include "mir/options/option.h"
 #include "mir/dispatch/multiplexing_dispatchable.h"
@@ -58,6 +60,7 @@ namespace mia = mi::android;
 namespace mr = mir::report;
 namespace ms = mir::scene;
 namespace mg = mir::graphics;
+namespace mgn = mg::nested;
 namespace msh = mir::shell;
 namespace md = mir::dispatch;
 
@@ -66,13 +69,17 @@ namespace
 
 bool is_arale()
 {
+#ifdef __ARM_EABI__
     try
     {
-        mir::SharedLibrary android_properties("libandroid-properties.so.1");
-        int (*property_get)(char const*, char*, char const*) = nullptr;
-        property_get = android_properties.load_function<decltype(property_get)>("property_get");
+        auto const android_properties = "libandroid-properties.so.1";
+        auto const arale_device_name = "arale";
+        int const property_value_max = 92;
 
-        const int property_value_max = 92;
+        mir::SharedLibrary android_properties_lib(android_properties);
+        int (*property_get)(char const*, char*, char const*) = nullptr;
+        property_get = android_properties_lib.load_function<decltype(property_get)>("property_get");
+
         char default_value[] = "";
         char value[property_value_max];
 
@@ -81,11 +88,12 @@ bool is_arale()
 
         property_get("ro.product.device", value, default_value);
 
-        return std::strcmp("arale", value) == 0;
+        return std::strcmp(arale_device_name, value) == 0;
     }
     catch(...)
     {
     }
+#endif
     return false;
 }
 
@@ -178,7 +186,9 @@ mir::DefaultServerConfiguration::the_input_dispatcher()
             std::chrono::milliseconds const key_repeat_delay{50};
 
             auto const options = the_options();
-            auto enable_repeat = options->get<bool>(options::enable_key_repeat_opt);
+            // lp:1675357: Disable generation of key repeat events on nested servers
+            auto enable_repeat = options->get<bool>(options::enable_key_repeat_opt) &&
+                !options->is_set(options::host_socket_opt);
 
             return std::make_shared<mi::KeyRepeatDispatcher>(
                 the_event_filter_chain_dispatcher(), the_main_loop(), the_cookie_authority(),
@@ -192,7 +202,7 @@ std::shared_ptr<mi::InputChannelFactory> mir::DefaultServerConfiguration::the_in
     if (!options->get<bool>(options::enable_input_opt))
         return std::make_shared<mi::NullInputChannelFactory>();
     else
-        return std::make_shared<mia::InputChannelFactory>();
+        return std::make_shared<mi::ChannelFactory>();
 }
 
 std::shared_ptr<mi::CursorListener>
@@ -272,8 +282,13 @@ mir::DefaultServerConfiguration::the_input_manager()
             }
             else if (options->is_set(options::host_socket_opt))
             {
-                // TODO nested input handling (== host_socket) should fold into a platform
-                return std::make_shared<mi::NullInputManager>();
+                auto const device_registry = the_input_device_registry();
+                auto const input_report = the_input_report();
+
+                // TODO: move this into a nested graphics platform
+                auto platform = std::make_shared<mgn::InputPlatform>(the_host_connection(), device_registry, input_report);
+
+                return std::make_shared<mi::DefaultInputManager>(the_input_reading_multiplexer(), std::move(platform));
             }
             else
             {
@@ -319,54 +334,71 @@ std::shared_ptr<mi::Seat> mir::DefaultServerConfiguration::the_seat()
                     the_input_dispatcher(),
                     the_touch_visualizer(),
                     the_cursor_listener(),
-                    the_input_region());
+                    the_input_region(),
+                    the_key_mapper(),
+                    the_clock(),
+                    the_seat_observer());
         });
 }
 
 std::shared_ptr<mi::InputDeviceRegistry> mir::DefaultServerConfiguration::the_input_device_registry()
 {
-    return default_input_device_hub(
-        [this]()
-        {
-            auto input_dispatcher = the_input_dispatcher();
-            auto key_repeater = std::dynamic_pointer_cast<mi::KeyRepeatDispatcher>(input_dispatcher);
-            auto hub = std::make_shared<mi::DefaultInputDeviceHub>(
-                the_global_event_sink(),
-                the_seat(),
-                the_input_reading_multiplexer(),
-                the_main_loop(),
-                the_cookie_authority());
-
-            if (key_repeater)
-                key_repeater->set_input_device_hub(hub);
-            return hub;
-        });
+    return the_default_input_device_hub();
 }
 
 std::shared_ptr<mi::InputDeviceHub> mir::DefaultServerConfiguration::the_input_device_hub()
 {
-    auto options = the_options();
-    if (options->is_set(options::host_socket_opt))
-    {
-        return the_mir_client_host_connection();
-    }
-    else
-    {
-        return default_input_device_hub(
-            [this]()
-            {
-                auto input_dispatcher = the_input_dispatcher();
-                auto key_repeater = std::dynamic_pointer_cast<mi::KeyRepeatDispatcher>(input_dispatcher);
-                auto hub = std::make_shared<mi::DefaultInputDeviceHub>(
-                    the_global_event_sink(),
-                    the_seat(),
-                    the_input_reading_multiplexer(),
-                    the_main_loop(),
-                    the_cookie_authority());
+    return the_default_input_device_hub();
+}
 
-                if (key_repeater)
-                    key_repeater->set_input_device_hub(hub);
-                return hub;
-            });
-    }
+std::shared_ptr<mi::DefaultInputDeviceHub> mir::DefaultServerConfiguration::the_default_input_device_hub()
+{
+   return default_input_device_hub(
+       [this]()
+       {
+           auto input_dispatcher = the_input_dispatcher();
+           auto key_repeater = std::dynamic_pointer_cast<mi::KeyRepeatDispatcher>(input_dispatcher);
+           auto hub = std::make_shared<mi::DefaultInputDeviceHub>(
+               the_global_event_sink(),
+               the_seat(),
+               the_input_reading_multiplexer(),
+               the_main_loop(),
+               the_cookie_authority(),
+               the_key_mapper(),
+               the_server_status_listener());
+
+           // lp:1675357: KeyRepeatDispatcher must be informed about removed input devices, otherwise
+           // pressed keys get repeated indefinitely
+           if (key_repeater)
+               key_repeater->set_input_device_hub(hub);
+           return hub;
+       });
+}
+
+std::shared_ptr<mi::KeyMapper> mir::DefaultServerConfiguration::the_key_mapper()
+{
+    return key_mapper(
+       [this]()
+       {
+           return std::make_shared<mi::receiver::XKBMapper>();
+       });
+}
+
+std::shared_ptr<mi::SeatObserver> mir::DefaultServerConfiguration::the_seat_observer()
+{
+    return seat_observer_multiplexer(
+        [default_executor = the_main_loop()]()
+        {
+            return std::make_shared<mi::SeatObserverMultiplexer>(default_executor);
+        });
+}
+
+std::shared_ptr<mir::ObserverRegistrar<mi::SeatObserver>>
+mir::DefaultServerConfiguration::the_seat_observer_registrar()
+{
+    return seat_observer_multiplexer(
+        [default_executor = the_main_loop()]()
+        {
+            return std::make_shared<mi::SeatObserverMultiplexer>(default_executor);
+        });
 }

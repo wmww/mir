@@ -19,31 +19,25 @@
 #ifndef MIR_COMPOSITOR_BUFFER_MAP_H_
 #define MIR_COMPOSITOR_BUFFER_MAP_H_
 
-#include "mir/frontend/buffer_stream_id.h"
 #include "mir/frontend/client_buffers.h"
 #include <mutex>
 #include <map>
 
 namespace mir
 {
-namespace graphics { class GraphicBufferAllocator; }
 namespace frontend { class BufferSink; }
 namespace compositor
 {
 class BufferMap : public frontend::ClientBuffers
 {
 public:
-    BufferMap(
-        frontend::BufferStreamId id,
-        std::shared_ptr<frontend::BufferSink> const& sink,
-        std::shared_ptr<graphics::GraphicBufferAllocator> const& allocator);
+    BufferMap(std::shared_ptr<frontend::BufferSink> const& sink);
 
-    graphics::BufferID add_buffer(graphics::BufferProperties const& properties) override;
+    graphics::BufferID add_buffer(std::shared_ptr<graphics::Buffer> const& buffer) override;
     void remove_buffer(graphics::BufferID id) override;
 
     void receive_buffer(graphics::BufferID id) override;
     void send_buffer(graphics::BufferID id) override;
-    size_t client_owned_buffer_count() const override;
 
     std::shared_ptr<graphics::Buffer>& operator[](graphics::BufferID) override;
     
@@ -61,9 +55,9 @@ private:
     Map buffers;
     Map::iterator checked_buffers_find(graphics::BufferID, std::unique_lock<std::mutex> const&);
 
-    frontend::BufferStreamId const stream_id;
-    std::shared_ptr<frontend::BufferSink> const sink;
-    std::shared_ptr<graphics::GraphicBufferAllocator> const allocator;
+    //would be better to schedule the async buffer callbacks in the ipc subsystem,
+    //instead of driving from within the compositor threads (LP: #1395421)
+    std::weak_ptr<frontend::BufferSink> const sink;
 };
 }
 }

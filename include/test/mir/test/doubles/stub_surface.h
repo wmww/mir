@@ -54,10 +54,10 @@ struct StubSurface : scene::Surface
     bool visible() const override;
     graphics::RenderableList generate_renderables(compositor::CompositorID id) const override;
     int buffers_ready_for_compositor(void const* compositor_id) const override;
-    MirSurfaceType type() const override;
-    MirSurfaceState state() const override;
-    int configure(MirSurfaceAttrib attrib, int value) override;
-    int query(MirSurfaceAttrib attrib) const override;
+    MirWindowType type() const override;
+    MirWindowState state() const override;
+    int configure(MirWindowAttrib attrib, int value) override;
+    int query(MirWindowAttrib attrib) const override;
     void hide() override;
     void show() override;
     void set_cursor_image(std::shared_ptr<graphics::CursorImage> const& image) override;
@@ -70,6 +70,9 @@ struct StubSurface : scene::Surface
     void set_keymap(MirInputDeviceId id, std::string const& model, std::string const& layout,
                     std::string const& variant, std::string const& options) override;
     void rename(std::string const& title) override;
+    void set_confine_pointer_state(MirPointerConfinementState state) override;
+    MirPointerConfinementState confine_pointer_state() const override;
+    void placed_relative(geometry::Rectangle const& placement) override;
 };
 }
 }

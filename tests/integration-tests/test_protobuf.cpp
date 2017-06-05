@@ -27,7 +27,6 @@
 
 #include "mir_test_framework/stubbed_server_configuration.h"
 #include "mir_test_framework/in_process_server.h"
-#include "mir_test_framework/using_stub_client_platform.h"
 #include "mir/test/doubles/null_platform_ipc_operations.h"
 
 #include <gtest/gtest.h>
@@ -58,8 +57,8 @@ struct DemoMirServer
     }
 
     void function(
-        mir::protobuf::Parameters const* parameters,
-        mir::protobuf::Result* response,
+        mir::protobuf::test::Parameters const* parameters,
+        mir::protobuf::test::Result* response,
         google::protobuf::Closure* done)
     {
         response->set_value(on_call(parameters->name()));
@@ -75,8 +74,8 @@ struct AMirServer
     }
 
     void function(
-        mir::protobuf::Parameters const* parameters,
-        mir::protobuf::Result* response,
+        mir::protobuf::test::Parameters const* parameters,
+        mir::protobuf::test::Result* response,
         google::protobuf::Closure* done)
     {
         channel->call_method(std::string(__func__), parameters, response, done);
@@ -97,7 +96,7 @@ struct DemoMessageProcessor : mfd::MessageProcessor
 
     void client_pid(int /*pid*/) override {}
 
-    bool dispatch(mfd::Invocation const& invocation, std::vector<mir::Fd> const& fds)
+    bool dispatch(mfd::Invocation const& invocation, std::vector<mir::Fd> const& fds) override
     {
         if ("function" == invocation.method_name())
         {
@@ -177,11 +176,10 @@ struct DemoPrivateProtobuf : mtf::InProcessServer
     mir::DefaultServerConfiguration& server_config() override { return my_server_config; }
 
     DemoServerConfiguration my_server_config;
-    mtf::UsingStubClientPlatform using_stub_client_platform;
 
     std::shared_ptr<DemoConnectionCreator> demo_connection_creator;
 
-    void SetUp()
+    void SetUp() override
     {
         ::demo_mir_server = &demo_mir_server;
 
@@ -212,7 +210,7 @@ TEST_F(DemoPrivateProtobuf, client_calls_server)
 
     auto const rpc_channel = mir::client::the_rpc_channel(connection);
 
-    using namespace mir::protobuf;
+    using namespace mir::protobuf::test;
     using namespace google::protobuf;
 
     AMirServer server(rpc_channel);
@@ -271,7 +269,7 @@ TEST_F(DemoPrivateProtobuf, server_receives_function_call)
 
     auto const rpc_channel = mir::client::the_rpc_channel(connection);
 
-    using namespace mir::protobuf;
+    using namespace mir::protobuf::test;
     using namespace google::protobuf;
 
     AMirServer server(rpc_channel);
@@ -300,7 +298,7 @@ TEST_F(DemoPrivateProtobuf, client_receives_result)
 
     auto const rpc_channel = mir::client::the_rpc_channel(connection);
 
-    using namespace mir::protobuf;
+    using namespace mir::protobuf::test;
     using namespace google::protobuf;
 
     AMirServer server(rpc_channel);

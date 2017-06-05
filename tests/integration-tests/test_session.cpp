@@ -25,8 +25,8 @@
 #include "mir/scene/surface_creation_parameters.h"
 #include "mir/scene/null_session_listener.h"
 #include "mir/compositor/buffer_stream.h"
-#include "mir/compositor/renderer.h"
-#include "mir/compositor/renderer_factory.h"
+#include "mir/renderer/renderer.h"
+#include "mir/renderer/renderer_factory.h"
 #include "mir/frontend/connector.h"
 
 #include "mir/test/doubles/stub_buffer_allocator.h"
@@ -68,26 +68,6 @@ struct TestServerConfiguration : public mir_test_framework::StubbedServerConfigu
     }
 };
 
-void swap_buffers_blocking(mf::Surface& surf, mg::Buffer*& buffer)
-{
-    std::mutex mutex;
-    std::condition_variable cv;
-    bool done = false;
-
-    surf.primary_buffer_stream()->swap_buffers(buffer,
-        [&](mg::Buffer* new_buffer)
-        {
-            std::unique_lock<decltype(mutex)> lock(mutex);
-            buffer = new_buffer;
-            done = true;
-            cv.notify_one();
-        });
-
-    std::unique_lock<decltype(mutex)> lock(mutex);
-
-    cv.wait(lock, [&]{ return done; });
-}
-
 struct StubGLBufferStream : public mtd::StubBufferStream
 {
 public:
@@ -100,7 +80,7 @@ public:
 struct StubGLBufferStreamFactory : public mtd::StubBufferStreamFactory
 {
     std::shared_ptr<mc::BufferStream> create_buffer_stream(
-        mf::BufferStreamId, std::shared_ptr<mf::BufferSink> const&,
+        mf::BufferStreamId, std::shared_ptr<mf::ClientBuffers> const&,
         mg::BufferProperties const&) override
     {
         return std::make_shared<StubGLBufferStream>();
@@ -124,23 +104,28 @@ TEST(ApplicationSession, stress_test_take_snapshot)
         conf.the_snapshot_strategy(),
         std::make_shared<ms::NullSessionListener>(),
         mtd::StubDisplayConfig{},
-        std::make_shared<mtd::NullEventSink>()
+        std::make_shared<mtd::NullEventSink>(),
+        conf.the_buffer_allocator()
     };
-    session.create_surface(ms::a_surface(), std::make_shared<mtd::NullEventSink>());
+
+    mg::BufferProperties properties(geom::Size{1,1}, mir_pixel_format_abgr_8888, mg::BufferUsage::software);
+    auto stream_id = session.create_buffer_stream(properties);
+    session.create_surface(
+        ms::a_surface().with_buffer_stream(stream_id),
+        std::make_shared<mtd::NullEventSink>());
 
     auto compositor = conf.the_compositor();
 
     compositor->start();
-    session.default_surface()->configure(mir_surface_attrib_swapinterval, 0);
+    session.default_surface()->configure(mir_window_attrib_swapinterval, 0);
 
     std::thread client_thread{
-        [&session]
+        [&session, stream_id]
         {
-            mg::Buffer* buffer{nullptr};
             for (int i = 0; i < 500; ++i)
             {
-                auto surface = session.default_surface();
-                swap_buffers_blocking(*surface, buffer);
+                auto stream = session.get_buffer_stream(stream_id);
+                stream->submit_buffer(nullptr);
                 std::this_thread::sleep_for(std::chrono::microseconds{50});
             }
         }};

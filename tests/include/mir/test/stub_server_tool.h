@@ -46,21 +46,16 @@ struct StubServerTool : doubles::StubDisplayServer
 
         std::lock_guard<std::mutex> lock(guard);
         surf_name = request->surface_name();
-        wait_condition.notify_one();
+        signal.notify_one();
 
         done->Run();
     }
 
-    virtual void next_buffer(
-        mir::protobuf::SurfaceId const* /*request*/,
-        mir::protobuf::Buffer* response,
+    virtual void submit_buffer(
+        mir::protobuf::BufferRequest const* /*request*/,
+        mir::protobuf::Void*,
         google::protobuf::Closure* done) override
     {
-        response->set_buffer_id(22);
-
-        std::lock_guard<std::mutex> lock(guard);
-        //FIXME: huh? What's the condition here?
-        wait_condition.notify_one();
         done->Run();
     }
 
@@ -101,7 +96,7 @@ struct StubServerTool : doubles::StubDisplayServer
     {
         std::lock_guard<std::mutex> lock(guard);
         //FIXME: huh? What's the condition here?
-        wait_condition.notify_one();
+        signal.notify_one();
         done->Run();
     }
 
@@ -127,7 +122,7 @@ struct StubServerTool : doubles::StubDisplayServer
 
     std::mutex mutable guard;
     std::string surf_name;
-    std::condition_variable wait_condition;
+    std::condition_variable signal;
     std::string app_name;
 };
 

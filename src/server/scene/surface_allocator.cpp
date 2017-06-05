@@ -29,12 +29,6 @@ namespace ms=mir::scene;
 namespace msh=mir::shell;
 namespace mi=mir::input;
 
-static inline bool has_alpha(MirPixelFormat fmt)
-{
-    return (fmt == mir_pixel_format_abgr_8888) ||
-           (fmt == mir_pixel_format_argb_8888);
-}
-
 ms::SurfaceAllocator::SurfaceAllocator(
     std::shared_ptr<input::InputChannelFactory> const& input_factory,
     std::shared_ptr<input::InputSender> const& input_sender,
@@ -48,19 +42,17 @@ ms::SurfaceAllocator::SurfaceAllocator(
 }
 
 std::shared_ptr<ms::Surface> ms::SurfaceAllocator::create_surface(
-    std::shared_ptr<compositor::BufferStream> const& buffer_stream,
+    std::list<ms::StreamInfo> const& streams,
     SurfaceCreationParameters const& params)
 {
-    auto actual_size = geom::Rectangle{params.top_left, buffer_stream->stream_size()};
-
-    bool nonrectangular = has_alpha(params.pixel_format);
     auto input_channel = input_factory->make_input_channel();
+    auto confine = params.confine_pointer.is_set() ? params.confine_pointer.value() : mir_pointer_unconfined;
     auto const surface = std::make_shared<BasicSurface>(
         params.name,
-        actual_size,
+        geom::Rectangle{params.top_left, params.size},
         params.parent,
-        nonrectangular,
-        buffer_stream,
+        confine,
+        streams,
         input_channel,
         input_sender,
         default_cursor_image,

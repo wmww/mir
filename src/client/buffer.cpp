@@ -23,20 +23,18 @@
 namespace mcl = mir::client;
 
 mcl::Buffer::Buffer(
-    mir_buffer_callback cb, void* context,
+    MirBufferCallback cb, void* context,
     int buffer_id,
     std::shared_ptr<ClientBuffer> const& buffer,
-    MirPresentationChain* chain,
+    MirConnection* connection,
     MirBufferUsage usage) :
-    cb(cb),
-    cb_context(context),
     buffer_id(buffer_id),
     buffer(buffer),
-    owned(true),
-    chain(chain),
+    cb([this, cb, context]{ (*cb)(reinterpret_cast<::MirBuffer*>(this), context); }),
+    owned(false),
+    connection(connection),
     usage(usage)
 {
-    cb(nullptr, reinterpret_cast<MirBuffer*>(this), cb_context);
 }
 
 int mcl::Buffer::rpc_id() const
@@ -49,19 +47,34 @@ void mcl::Buffer::submitted()
     std::lock_guard<decltype(mutex)> lk(mutex);
     if (!owned)
         BOOST_THROW_EXCEPTION(std::logic_error("cannot submit unowned buffer"));
+    buffer->mark_as_submitted();
     mapped_region.reset();
     owned = false;
 }
 
+void mcl::Buffer::received()
+{
+    {
+        std::lock_guard<decltype(mutex)> lk(mutex);
+        if (!owned)
+            owned = true;
+    }
+
+    cb();
+}
+
 void mcl::Buffer::received(MirBufferPackage const& update_package)
 {
-    std::lock_guard<decltype(mutex)> lk(mutex);
-    if (!owned)
     {
-        owned = true;
-        buffer->update_from(update_package);
-        cb(nullptr, reinterpret_cast<MirBuffer*>(this), cb_context);
+        std::lock_guard<decltype(mutex)> lk(mutex);
+        if (!owned)
+        {
+            owned = true;
+            buffer->update_from(update_package);
+        }
     }
+
+    cb();
 }
     
 MirGraphicsRegion mcl::Buffer::map_region()
@@ -77,29 +90,15 @@ MirGraphicsRegion mcl::Buffer::map_region()
     };
 }
 
-MirNativeBuffer* mcl::Buffer::as_mir_native_buffer() const
+void mcl::Buffer::unmap_region()
 {
-    return buffer->as_mir_native_buffer();
+    std::lock_guard<decltype(mutex)> lk(mutex);
+    mapped_region = nullptr;
 }
 
-void mcl::Buffer::set_fence(MirNativeFence* native_fence, MirBufferAccess access)
+MirConnection* mcl::Buffer::allocating_connection() const
 {
-    buffer->set_fence(native_fence, access);
-}
-
-MirNativeFence* mcl::Buffer::get_fence() const
-{
-    return buffer->get_fence();
-}
-
-bool mcl::Buffer::wait_fence(MirBufferAccess access, std::chrono::nanoseconds timeout)
-{
-    return buffer->wait_fence(access, timeout);
-}
-
-MirPresentationChain* mcl::Buffer::allocating_chain() const
-{
-    return chain;
+    return connection;
 }
 
 MirBufferUsage mcl::Buffer::buffer_usage() const
@@ -115,4 +114,28 @@ MirPixelFormat mcl::Buffer::pixel_format() const
 mir::geometry::Size mcl::Buffer::size() const
 {
     return buffer->size();
+}
+std::shared_ptr<mcl::ClientBuffer> mcl::Buffer::client_buffer() const
+{
+    return buffer;
+}
+
+void mcl::Buffer::increment_age()
+{
+    buffer->increment_age();
+}
+
+bool mcl::Buffer::valid() const
+{
+    return true;
+}
+
+char const* mcl::Buffer::error_message() const
+{
+    return "";
+}
+
+void mcl::Buffer::set_callback(MirBufferCallback callback, void* context)
+{
+    cb.set_callback([&, callback, context]{ (*callback)(reinterpret_cast<::MirBuffer*>(this), context); });
 }

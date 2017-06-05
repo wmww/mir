@@ -25,9 +25,11 @@
 #include "mir/input/input_device_info.h"
 #include "mir/input/pointer_settings.h"
 #include "mir/input/touchpad_settings.h"
+#include "mir/input/mir_keyboard_config.h"
 #include "mir/optional_value.h"
 
 #include <memory>
+#include <mutex>
 
 namespace mir
 {
@@ -38,29 +40,36 @@ class ActionQueue;
 namespace input
 {
 
+class KeyMapper;
 class InputDevice;
 
 class DefaultDevice : public Device
 {
 public:
     DefaultDevice(MirInputDeviceId id, std::shared_ptr<dispatch::ActionQueue> const& actions,
-                  InputDevice& device);
+                  InputDevice& device, std::shared_ptr<KeyMapper> const& key_mapper);
     MirInputDeviceId id() const override;
     DeviceCapabilities capabilities() const override;
     std::string name() const override;
     std::string unique_id() const override;
 
-    optional_value<PointerConfiguration> pointer_configuration() const override;
-    void apply_pointer_configuration(PointerConfiguration const&) override;
-    optional_value<TouchpadConfiguration> touchpad_configuration() const override;
-    void apply_touchpad_configuration(TouchpadConfiguration const&) override;
+    optional_value<MirPointerConfig> pointer_configuration() const override;
+    void apply_pointer_configuration(MirPointerConfig const&) override;
+    optional_value<MirTouchpadConfig> touchpad_configuration() const override;
+    void apply_touchpad_configuration(MirTouchpadConfig const&) override;
+    optional_value<MirKeyboardConfig> keyboard_configuration() const override;
+    void apply_keyboard_configuration(MirKeyboardConfig const&) override;
+    void disable_queue();
 private:
     MirInputDeviceId const device_id;
     InputDevice& device;
     InputDeviceInfo const info;
     optional_value<PointerSettings> pointer;
     optional_value<TouchpadSettings> touchpad;
-    std::shared_ptr<dispatch::ActionQueue> const actions;
+    optional_value<MirKeyboardConfig> keyboard;
+    std::shared_ptr<dispatch::ActionQueue> actions;
+    std::shared_ptr<KeyMapper> const key_mapper;
+    std::mutex mutable config_mutex;
 };
 
 }

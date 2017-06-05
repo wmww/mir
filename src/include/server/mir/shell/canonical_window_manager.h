@@ -63,7 +63,7 @@ public:
 
     void handle_delete_surface(std::shared_ptr<scene::Session> const& session, std::weak_ptr<scene::Surface> const& surface) override;
 
-    int handle_set_state(std::shared_ptr<scene::Surface> const& surface, MirSurfaceState value) override;
+    int handle_set_state(std::shared_ptr<scene::Surface> const& surface, MirWindowState value) override;
 
     bool handle_keyboard_event(MirKeyboardEvent const* event) override;
 
@@ -83,7 +83,7 @@ private:
         mir_input_event_modifier_ctrl |
         mir_input_event_modifier_meta;
 
-    void toggle(MirSurfaceState state);
+    void toggle(MirWindowState state);
     void click(geometry::Point cursor);
     void resize(geometry::Point cursor);
     void drag(geometry::Point cursor);
@@ -106,10 +106,16 @@ private:
 
     geometry::Rectangle display_area;
     geometry::Point old_cursor{};
-    std::weak_ptr<scene::Surface> active_surface_;
     using FullscreenSurfaces = std::set<std::weak_ptr<scene::Surface>, std::owner_less<std::weak_ptr<scene::Surface>>>;
 
     FullscreenSurfaces fullscreen_surfaces;
+
+    bool resizing = false;
+    bool left_resize = false;
+    bool top_resize = false;
+
+    std::recursive_mutex active_surface_mutex;
+    std::weak_ptr<scene::Surface> active_surface_;
 };
 
 using CanonicalWindowManager = WindowManagerConstructor<CanonicalWindowManagerPolicy>;

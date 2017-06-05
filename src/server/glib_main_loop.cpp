@@ -36,14 +36,14 @@ public:
     AlarmImpl(
         GMainContext* main_context,
         std::shared_ptr<mir::time::Clock> const& clock,
-        std::shared_ptr<mir::LockableCallback> const& callback,
+        std::unique_ptr<mir::LockableCallback>&& callback,
         std::function<void()> const& exception_handler)
         : main_context{g_main_context_ref(main_context)},
           clock{clock},
           state_{State::cancelled},
           exception_handler{exception_handler},
           wrapped_callback{std::make_shared<mir::LockableCallbackWrapper>(
-              callback, [this] { state_ = State::triggered; })}
+              std::move(callback), [this] { state_ = State::triggered; })}
     {
     }
 
@@ -277,11 +277,11 @@ bool mir::GLibMainLoop::should_process_actions_for(void const* owner)
 std::unique_ptr<mir::time::Alarm> mir::GLibMainLoop::create_alarm(
     std::function<void()> const& callback)
 {
-    return create_alarm(std::make_shared<BasicCallback>(callback));
+    return create_alarm(std::make_unique<BasicCallback>(callback));
 }
 
 std::unique_ptr<mir::time::Alarm> mir::GLibMainLoop::create_alarm(
-    std::shared_ptr<LockableCallback> const& callback)
+    std::unique_ptr<LockableCallback> callback)
 {
     auto const exception_hander =
         [this]
@@ -290,7 +290,7 @@ std::unique_ptr<mir::time::Alarm> mir::GLibMainLoop::create_alarm(
         };
 
     return std::make_unique<AlarmImpl>(
-        main_context, clock, callback, exception_hander);
+        main_context, clock, std::move(callback), exception_hander);
 }
 
 void mir::GLibMainLoop::reprocess_all_sources()
@@ -339,4 +339,20 @@ void mir::GLibMainLoop::handle_exception(std::exception_ptr const& e)
 {
     main_loop_exception = e;
     stop();
+}
+
+void mir::GLibMainLoop::spawn(std::function<void()>&& work)
+{
+    auto const action_with_exception_handling =
+        [this, action = std::move(work)]
+        {
+            try { action(); }
+            catch (...) { handle_exception(std::current_exception()); }
+        };
+
+    detail::add_server_action_gsource(
+        main_context,
+        nullptr,
+        action_with_exception_handling,
+        [](auto) { return true; });
 }

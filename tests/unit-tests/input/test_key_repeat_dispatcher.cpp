@@ -24,16 +24,15 @@
 #include "mir/time/alarm_factory.h"
 #include "mir/cookie/authority.h"
 #include "mir/input/input_device_observer.h"
-#include "mir/input/pointer_configuration.h"
-#include "mir/input/touchpad_configuration.h"
+#include "mir/input/mir_pointer_config.h"
+#include "mir/input/mir_touchpad_config.h"
+#include "mir/input/mir_keyboard_config.h"
 #include "mir/input/device.h"
 
 #include "mir/test/fake_shared.h"
 #include "mir/test/event_matchers.h"
 #include "mir/test/doubles/mock_input_dispatcher.h"
 #include "mir/test/doubles/mock_input_device_hub.h"
-
-#include "linux/input.h"
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -69,7 +68,7 @@ struct MockAlarmFactory : public mir::time::AlarmFactory
         return std::unique_ptr<mir::time::Alarm>(create_alarm_adapter(cb));
     }
 
-    std::unique_ptr<mir::time::Alarm> create_alarm(std::shared_ptr<mir::LockableCallback> const&)
+    std::unique_ptr<mir::time::Alarm> create_alarm(std::unique_ptr<mir::LockableCallback>)
     {
         return nullptr;
     }
@@ -92,10 +91,12 @@ struct StubDevice : public mi::Device
     std::string name() const {return device_name;}
     std::string unique_id() const {return {};}
 
-    mir::optional_value<mi::PointerConfiguration> pointer_configuration() const {return {};}
-    void apply_pointer_configuration(mi::PointerConfiguration const&) {;}
-    mir::optional_value<mi::TouchpadConfiguration> touchpad_configuration() const {return {};}
-    void apply_touchpad_configuration(mi::TouchpadConfiguration const&) {}
+    mir::optional_value<MirPointerConfig> pointer_configuration() const {return {};}
+    void apply_pointer_configuration(MirPointerConfig const&) {;}
+    mir::optional_value<MirTouchpadConfig> touchpad_configuration() const {return {};}
+    void apply_touchpad_configuration(MirTouchpadConfig const&) {}
+    mir::optional_value<MirKeyboardConfig> keyboard_configuration() const {return {};}
+    void apply_keyboard_configuration(MirKeyboardConfig const&) {}
 };
 
 struct KeyRepeatDispatcher : public testing::Test
@@ -147,8 +148,9 @@ struct KeyRepeatDispatcherOnArale : KeyRepeatDispatcher
 
     mir::EventUPtr mtk_key_down_event()
     {
+        auto const home_button = 53;
         return mev::make_event(mtk_id, std::chrono::nanoseconds(0), std::vector<uint8_t>{}, mir_keyboard_action_down, 0,
-                               KEY_LEFTALT, mir_input_event_modifier_none);
+                               home_button, mir_input_event_modifier_none);
     }
 };
 }

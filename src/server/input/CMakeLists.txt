@@ -1,11 +1,15 @@
 include_directories(${MIR_3RD_PARTY_INCLUDE_DIRECTORIES})
 include_directories(${MIR_ANDROID_INCLUDE_DIRECTORIES})
-
+include_directories(${PROJECT_SOURCE_DIR}/include/renderers/sw)
 set(
   INPUT_SOURCES
 
   basic_seat.cpp
   builtin_cursor_images.cpp
+  channel.cpp
+  channel_factory.cpp
+  config_changer.cpp
+  config_changer.h
   cursor_controller.cpp
   default_configuration.cpp
   default_device.cpp
@@ -24,6 +28,8 @@ set(
   touchspot_controller.cpp
   validator.cpp
   vt_filter.cpp
+  seat_observer_multiplexer.cpp
+  seat_observer_multiplexer.h
 )
 
 add_subdirectory(android)

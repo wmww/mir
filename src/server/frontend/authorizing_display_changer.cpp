@@ -17,10 +17,32 @@
  */
 
 #include "authorizing_display_changer.h"
+#include "mir/client_visible_error.h"
+#include "mir_toolkit/client_types.h"
 #include <boost/throw_exception.hpp>
 
 namespace mf = mir::frontend;
 namespace mg = mir::graphics;
+
+namespace
+{
+class UnauthorizedConfigurationRequest : public mir::ClientVisibleError
+{
+public:
+    UnauthorizedConfigurationRequest()
+        : mir::ClientVisibleError("Not authorized to set base display configuration")
+    {
+    }
+    MirErrorDomain domain() const noexcept override
+    {
+        return mir_error_domain_display_configuration;
+    }
+    uint32_t code() const noexcept override
+    {
+        return mir_display_configuration_error_unauthorized;
+    }
+};
+}
 
 mf::AuthorizingDisplayChanger::AuthorizingDisplayChanger(
     std::shared_ptr<frontend::DisplayChanger> const& changer,
@@ -47,6 +69,15 @@ void mf::AuthorizingDisplayChanger::configure(
         BOOST_THROW_EXCEPTION(std::runtime_error("not authorized to apply display configurations"));
 }
 
+void mf::AuthorizingDisplayChanger::remove_session_configuration(
+    std::shared_ptr<mf::Session> const& session)
+{
+    if (configure_display_is_allowed)
+        changer->remove_session_configuration(session);
+    else
+        BOOST_THROW_EXCEPTION(std::runtime_error("not authorized to remove display configurations"));
+}
+
 void mf::AuthorizingDisplayChanger::set_base_configuration(
     std::shared_ptr<graphics::DisplayConfiguration> const& config)
 {
@@ -54,4 +85,41 @@ void mf::AuthorizingDisplayChanger::set_base_configuration(
         changer->set_base_configuration(config);
     else
         BOOST_THROW_EXCEPTION(std::runtime_error("not authorized to set base display configurations"));
+}
+
+void mf::AuthorizingDisplayChanger::preview_base_configuration(
+    std::weak_ptr<Session> const& session,
+    std::shared_ptr<graphics::DisplayConfiguration> const& config,
+    std::chrono::seconds timeout)
+{
+    if (set_base_configuration_is_allowed)
+    {
+        changer->preview_base_configuration(session, config, timeout);
+    }
+    else
+    {
+        BOOST_THROW_EXCEPTION(UnauthorizedConfigurationRequest{});
+    }
+}
+
+void mf::AuthorizingDisplayChanger::confirm_base_configuration(
+    std::shared_ptr<Session> const& session,
+    std::shared_ptr<graphics::DisplayConfiguration> const& config)
+{
+    if (set_base_configuration_is_allowed)
+    {
+        changer->confirm_base_configuration(session, config);
+    }
+    else
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error("not authorized to set base display configurations"));
+    }
+}
+
+void
+mir::frontend::AuthorizingDisplayChanger::cancel_base_configuration_preview(std::shared_ptr<mir::frontend::Session> const& session)
+{
+    // There's no particular reason to require authorisation here - it only takes effect if the client
+    // has already been authorised to change configuration.
+    changer->cancel_base_configuration_preview(session);
 }

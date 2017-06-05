@@ -30,6 +30,7 @@
 #include <dlfcn.h>
 #include <stdexcept>
 #include <boost/throw_exception.hpp>
+#include <cstring>
 
 namespace mcl = mir::client;
 namespace mclm = mcl::mesa;
@@ -77,7 +78,9 @@ struct RealBufferFileOps : public mclm::BufferFileOps
 
 }
 
-mir::UniqueModulePtr<mcl::ClientPlatform> create_client_platform(mcl::ClientContext* context)
+mir::UniqueModulePtr<mcl::ClientPlatform> create_client_platform(
+    mcl::ClientContext* context,
+    std::shared_ptr<mir::logging::Logger> const& /*logger*/)
 {
     mir::assert_entry_point_signature<mcl::CreateClientPlatform>(&create_client_platform);
     ensure_loaded_with_rtld_global_mesa_client();
@@ -96,10 +99,11 @@ bool
 is_appropriate_module(mcl::ClientContext* context)
 {
     mir::assert_entry_point_signature<mcl::ClientPlatformProbe>(&is_appropriate_module);
-    MirPlatformPackage platform;
-    context->populate_server_package(platform);
-    // TODO: Actually check what platform we're using, rather than blindly
-    //       hope we can distinguish them from the stuff they've put in the
-    //       PlatformPackage.
-    return platform.data_items == 0 && platform.fd_items == 1;
+
+    MirModuleProperties server_graphics_module;
+    context->populate_graphics_module(server_graphics_module);
+
+    // We may in future wish to compare versions, but the mesa server/mesa client interface hasn't
+    // changed in ages.
+    return (strncmp("mir:mesa", server_graphics_module.name, strlen("mir:mesa")) == 0);
 }

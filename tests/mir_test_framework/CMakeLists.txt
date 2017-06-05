@@ -4,11 +4,11 @@ include_directories(
   ${PROJECT_SOURCE_DIR}/src/include/common
   ${PROJECT_SOURCE_DIR}/src/include/server
   ${PROJECT_SOURCE_DIR}/src/include/client
+  ${PROJECT_SOURCE_DIR}/include/renderers/sw
   ${Boost_INCLUDE_DIRS}
   ${GLESv2_INCLUDE_DIRS}
   ${CMAKE_SOURCE_DIR}
   ${UMOCKDEV_INCLUDE_DIRS}
-  ${ANDROID_HEADERS_INCLUDE_DIRS}
 )
 
 add_definitions(
@@ -21,7 +21,12 @@ add_definitions(
     -DMIR_BUILD_PREFIX="${CMAKE_BINARY_DIR}"
     )
 
+# We don't want LTO objects in a published archive (libmir-test-assist.a)
+string (REPLACE " -flto " " " CMAKE_C_FLAGS ${CMAKE_C_FLAGS})
+string (REPLACE " -flto " " " CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
+
 add_library(mir-public-test-framework OBJECT
+  ${PROJECT_SOURCE_DIR}/include/test/mir_test_framework/any_surface.h
   any_surface.cpp
   async_server_runner.cpp
   command_line_server_configuration.cpp
@@ -31,25 +36,28 @@ add_library(mir-public-test-framework OBJECT
   executable_path.cpp
   headless_in_process_server.cpp
   headless_nested_server_runner.cpp
+  headless_display_buffer_compositor_factory.cpp
   headless_test.cpp
   interprocess_client_server_test.cpp
   main.cpp
-  libinput_environment.cpp
+  observant_shell.cpp
   placement_applying_shell.cpp
   process.cpp
   server_runner.cpp
   socket_detect_server.cpp
-  stub_input_platform.cpp
+  ${PROJECT_SOURCE_DIR}/tests/include/mir_test_framework/stub_client_platform_factory.h
   stub_client_platform_factory.cpp
   stub_server_platform_factory.cpp
   stub_session.cpp
   stub_surface.cpp
+  ${PROJECT_SOURCE_DIR}/tests/include/mir_test_framework/stubbed_server_configuration.h
   stubbed_server_configuration.cpp
   testing_client_options.cpp
   testing_server_options.cpp
   temporary_environment_value.cpp
-  using_stub_client_platform.cpp
   visible_surface.cpp
+  stub_client_platform_options.cpp
+  ${PROJECT_SOURCE_DIR}/include/test/mir_test_framework/stub_client_platform_options.h
 )
 
 # Umockdev uses glib, which uses the deprecated "register" storage qualifier
@@ -77,6 +85,7 @@ uses_android_input(mir-protected-test-framework)
 
 target_link_libraries(mir-test-framework-static
 
+  mirclient
   ${Boost_LIBRARIES}
   ${GTEST_BOTH_LIBRARIES}
   ${GMOCK_LIBRARY}
@@ -110,14 +119,17 @@ set_target_properties(
 )
 
 add_library(
-  mirplatforminputstub MODULE
+  mir-test-input-framework OBJECT
   
   stub_input.cpp
   fake_input_device_impl.cpp
   stub_input_platform.cpp
-  $<TARGET_OBJECTS:mirevdevutilsobjects>
   )
 
+add_library(
+  mirplatforminputstub MODULE
+  $<TARGET_OBJECTS:mir-test-input-framework>
+  $<TARGET_OBJECTS:mirevdevutilsobjects>)
 target_link_libraries(mirplatforminputstub mircommon)
 
 set_target_properties(

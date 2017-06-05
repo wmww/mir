@@ -7,14 +7,18 @@ include_directories(
 )
 
 # Note that production binaries don't have underscores in their names
-mir_add_wrapped_executable(mirping ping.c)
-target_link_libraries(mirping mirclient)
-
 mir_add_wrapped_executable(mirout out.c)
 target_link_libraries(mirout mirclient m)
 
+mir_add_wrapped_executable(mirvanity vanity.c)
+target_include_directories(mirvanity PRIVATE ${PROJECT_SOURCE_DIR}/examples)
+target_link_libraries(mirvanity eglapp)
+
 mir_add_wrapped_executable(mirin in.cpp)
 target_link_libraries(mirin mirclient)
+
+mir_add_wrapped_executable(mirrun run.cpp)
+target_link_libraries(mirrun mircommon ${Boost_LIBRARIES} )
 
 mir_add_wrapped_executable(mirscreencast screencast.cpp)
 target_link_libraries(mirscreencast

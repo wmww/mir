@@ -28,9 +28,12 @@
 
 namespace mir
 {
+template<class Observer>
+class ObserverRegistrar;
+
 namespace compositor { class Compositor; class DisplayBufferCompositorFactory; class CompositorReport; }
-namespace frontend { class SessionAuthorizer; class Session; class SessionMediatorReport; }
-namespace graphics { class Cursor; class Platform; class Display; class GLConfig; class DisplayConfigurationPolicy; class DisplayConfigurationReport; }
+namespace frontend { class SessionAuthorizer; class Session; class SessionMediatorObserver; }
+namespace graphics { class Cursor; class Platform; class Display; class GLConfig; class DisplayConfigurationPolicy; class DisplayConfigurationObserver; }
 namespace input { class CompositeEventFilter; class InputDispatcher; class CursorListener; class CursorImages; class TouchVisualizer; class InputDeviceHub;}
 namespace logging { class Logger; }
 namespace options { class Option; }
@@ -46,19 +49,24 @@ class DisplayConfigurationController;
 class FocusController;
 class HostLifecycleEventListener;
 class InputTargeter;
+class PersistentSurfaceStore;
 class Shell;
 class SurfaceStack;
 }
 namespace scene
 {
 class ApplicationNotRespondingDetector;
-class BufferStreamFactory; 
+class BufferStreamFactory;
 class PromptSessionListener;
 class PromptSessionManager;
 class SessionListener;
 class SessionCoordinator;
 class SurfaceFactory;
 class CoordinateTranslator;
+}
+namespace input
+{
+class SeatObserver;
 }
 
 class Fd;
@@ -85,12 +93,6 @@ public:
     /// set the command line.
     /// This must remain valid while apply_settings() and run() are called.
     void set_command_line(int argc, char const* argv[]);
-
-    /// Sets an override functor for creating the cookie authority.
-    /// A secret can be saved and any process this secret is shared
-    /// with can verify Mir-generated cookies, or produce their own.
-    void override_the_cookie_authority(
-        std::function<std::shared_ptr<cookie::Authority>()> const& cookie_authority_builder);
 
     /// Applies any configuration options, hooks, or custom implementations.
     /// Must be called before calling run() or accessing any mir subsystems.
@@ -188,10 +190,19 @@ public:
  *  These allow the user to insert logic into startup or error handling.
  *  For obvious reasons they should be called before run().
  *  @{ */
+    /// Add a callback to be invoked when the settings have been applied, but before
+    /// the server has been initialized. This allows client code to get access Mir objects.
+    /// If multiple callbacks are added they will be invoked in the sequence added.
+    void add_pre_init_callback(std::function<void()> const& pre_init_callback);
+
     /// Add a callback to be invoked when the server has been initialized,
     /// but before it starts. This allows client code to get access Mir objects.
     /// If multiple callbacks are added they will be invoked in the sequence added.
     void add_init_callback(std::function<void()> const& init_callback);
+
+    /// Add a callback to be invoked when the server is about to stop,
+    /// If multiple callbacks are added they will be invoked in the reverse sequence added.
+    void add_stop_callback(std::function<void()> const& stop_callback);
 
     /// Set a handler for exceptions. This is invoked in a catch (...) block and
     /// the exception can be re-thrown to retrieve type information.
@@ -240,12 +251,13 @@ public:
     void override_the_display_buffer_compositor_factory(
         Builder<compositor::DisplayBufferCompositorFactory> const& compositor_builder);
 
-    /// Sets an override functor for creating the display configuration report.
-    void override_the_display_configuration_report(
-        Builder<graphics::DisplayConfigurationReport> const& report_builder);
-
     /// Sets an override functor for creating the gl config.
     void override_the_gl_config(Builder<graphics::GLConfig> const& gl_config_builder);
+
+    /// Sets an override functor for creating the cookie authority.
+    /// A secret can be saved and any process this secret is shared
+    /// with can verify Mir-generated cookies, or produce their own.
+    void override_the_cookie_authority(Builder<cookie::Authority> const& cookie_authority_builder);
 
     /// Sets an override functor for creating the coordinate translator.
     void override_the_coordinate_translator(
@@ -276,9 +288,6 @@ public:
     /// Sets an override functor for creating the session listener.
     void override_the_session_listener(Builder<scene::SessionListener> const& session_listener_builder);
 
-    /// Sets an override functor for creating the session mediator report.
-    void override_the_session_mediator_report(Builder<frontend::SessionMediatorReport> const& session_mediator_builder);
-
     /// Sets an override functor for creating the shell.
     void override_the_shell(Builder<shell::Shell> const& wrapper);
 
@@ -288,6 +297,9 @@ public:
     /// Sets an override functor for creating the application not responding detector.
     void override_the_application_not_responding_detector(
         Builder<scene::ApplicationNotRespondingDetector> const& anr_detector_builder);
+
+    /// Sets an override functor for creating the persistent_surface_store
+    void override_the_persistent_surface_store(Builder<shell::PersistentSurfaceStore> const& persistent_surface_store);
 
     /// Each of the wrap functions takes a wrapper functor of the same form
     template<typename T> using Wrapper = std::function<std::shared_ptr<T>(std::shared_ptr<T> const&)>;
@@ -310,6 +322,9 @@ public:
 
     /// Sets a wrapper functor for creating the surface stack.
     void wrap_surface_stack(Wrapper<shell::SurfaceStack> const& surface_stack);
+
+    /// Sets a wrapper functor for creating the application not responding detector.
+    void wrap_application_not_responding_detector(Wrapper<scene::ApplicationNotRespondingDetector> const & anr_detector);
 /** @} */
 
 /** @name Getting access to Mir subsystems
@@ -395,6 +410,23 @@ public:
     /// \return the application not responding detector
     auto the_application_not_responding_detector() const ->
         std::shared_ptr<scene::ApplicationNotRespondingDetector>;
+
+    /// \return the persistent surface store
+    auto the_persistent_surface_store() const -> std::shared_ptr<shell::PersistentSurfaceStore>;
+
+    /// \return a registrar to add and remove DisplayConfigurationChangeObservers
+    auto the_display_configuration_observer_registrar() const ->
+        std::shared_ptr<ObserverRegistrar<graphics::DisplayConfigurationObserver>>;
+
+    /// \return a registrar to add and remove SeatObservers
+    auto the_seat_observer_registrar() const ->
+        std::shared_ptr<ObserverRegistrar<input::SeatObserver>>;
+
+    /// \return a registrar to add and remove SessionMediatorObservers
+    auto the_session_mediator_observer_registrar() const ->
+        std::shared_ptr<ObserverRegistrar<frontend::SessionMediatorObserver>>;
+
+
 /** @} */
 
 /** @name Client side support

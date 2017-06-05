@@ -9,6 +9,7 @@ include_directories(
   ${PROJECT_SOURCE_DIR}/include/platform
   ${PROJECT_SOURCE_DIR}/include/client
   ${PROJECT_SOURCE_DIR}/include/server
+  ${PROJECT_SOURCE_DIR}/include/renderer
   ${PROJECT_SOURCE_DIR}/include/renderers/gl
   ${PROJECT_SOURCE_DIR}/src/include/platform
   ${PROJECT_SOURCE_DIR}/src/include/client
@@ -58,6 +59,13 @@ add_library(mirserverobjects OBJECT
   server.cpp
   lockable_callback_wrapper.cpp
   basic_callback.cpp
+  ${PROJECT_SOURCE_DIR}/include/server/mir/time/alarm_factory.h
+  ${PROJECT_SOURCE_DIR}/include/server/mir/time/alarm.h
+  ${PROJECT_SOURCE_DIR}/include/server/mir/observer_registrar.h
+  ${PROJECT_SOURCE_DIR}/include/server/mir/executor.h
+  ${PROJECT_SOURCE_DIR}/src/include/server/mir/observer_multiplexer.h
+  ${PROJECT_SOURCE_DIR}/src/include/server/mir/glib_main_loop.h
+  ${PROJECT_SOURCE_DIR}/src/include/server/mir/glib_main_loop_sources.h
 )
 
 set(MIR_SERVER_OBJECTS
@@ -73,7 +81,6 @@ set(MIR_SERVER_OBJECTS
   $<TARGET_OBJECTS:mirlogging>
   $<TARGET_OBJECTS:mirnullreport>
   $<TARGET_OBJECTS:mirnestedgraphics>
-  $<TARGET_OBJECTS:miroffscreengraphics>
   $<TARGET_OBJECTS:mirthread>
 
   $<TARGET_OBJECTS:mirrenderergl>
@@ -82,7 +89,7 @@ set(MIR_SERVER_OBJECTS
 
 set(MIR_SERVER_REFERENCES
   ${EGL_LDFLAGS} ${EGL_LIBRARIES}
-  ${GLESv2_LDFLAGS} ${GLESv2_LIBRARIES}
+  ${GL_LDFLAGS} ${GL_LIBRARIES}
   ${UDEV_LDFLAGS} ${UDEV_LIBRARIES}
   ${GLIB_LDFLAGS} ${GLIB_LIBRARIES}
   ${UUID_LDFLAGS} ${UUID_LIBRARIES}
@@ -91,8 +98,7 @@ set(MIR_SERVER_REFERENCES
 set(MIR_SERVER_OBJECTS ${MIR_SERVER_OBJECTS} PARENT_SCOPE)
 set(MIR_SERVER_REFERENCES ${MIR_SERVER_REFERENCES} PARENT_SCOPE)
 
-mir_add_library_with_symbols(mirserver SHARED
-  symbols.map
+add_library(mirserver SHARED
   ${MIR_SERVER_OBJECTS}
 )
 
@@ -107,7 +113,7 @@ target_link_libraries(mirserver LINK_PUBLIC
   ${GLog_LIBRARY}
   ${GFlags_LIBRARY}
   ${EGL_LDFLAGS} ${EGL_LIBRARIES}
-  ${GLESv2_LDFLAGS} ${GLESv2_LIBRARIES}
+  ${GL_LDFLAGS} ${GL_LIBRARIES}
   ${UDEV_LDFLAGS} ${UDEV_LIBRARIES}
   ${GLIB_LDFLAGS} ${GLIB_LIBRARIES}
   ${UUID_LDFLAGS} ${UUID_LIBRARIES}
@@ -123,7 +129,7 @@ install(DIRECTORY
   ${CMAKE_SOURCE_DIR}/include/server/mir DESTINATION "include/mirserver"
 )
 
-set(MIRSERVER_ABI 38) # Be sure to increment MIR_VERSION_MINOR at the same time
+set(MIRSERVER_ABI 43) # Be sure to increment MIR_VERSION_MINOR at the same time
 set(symbol_map ${CMAKE_CURRENT_SOURCE_DIR}/symbols.map)
 
 set_target_properties(
@@ -132,6 +138,7 @@ set_target_properties(
   PROPERTIES
   SOVERSION ${MIRSERVER_ABI}
   LINK_FLAGS "-Wl,--exclude-libs=ALL -Wl,--version-script,${symbol_map}"
+  LINK_DEPENDS ${symbol_map}
 )
 
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/mirserver.pc

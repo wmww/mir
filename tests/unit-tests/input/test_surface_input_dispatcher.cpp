@@ -264,7 +264,7 @@ TEST_F(SurfaceInputDispatcher, key_event_delivered_to_focused_surface)
     FakeKeyboard keyboard;
     auto event = keyboard.press();
 
-    EXPECT_CALL(*surface, consume(mt::MirKeyboardEventMatches(*event))).Times(1);
+    EXPECT_CALL(*surface, consume(mt::MirKeyboardEventMatches(event.get()))).Times(1);
 
     dispatcher.start();
 
@@ -284,97 +284,6 @@ TEST_F(SurfaceInputDispatcher, key_event_dropped_if_no_surface_focused)
     EXPECT_FALSE(dispatcher.dispatch(*keyboard.press()));
 }
 
-TEST_F(SurfaceInputDispatcher, inconsistent_key_events_dropped)
-{
-    auto surface = scene.add_surface();
-
-    EXPECT_CALL(*surface, consume(_)).Times(0);
-
-    dispatcher.start();
-
-    dispatcher.set_focus(surface);
-
-    FakeKeyboard keyboard;
-    EXPECT_FALSE(dispatcher.dispatch(*keyboard.release()));
-}
-
-TEST_F(SurfaceInputDispatcher, key_state_is_consistent_per_client)
-{
-    auto surface_1 = scene.add_surface();
-    auto surface_2 = scene.add_surface();
-
-    FakeKeyboard keyboard;
-    auto down_event = keyboard.press();
-    auto up_event = keyboard.release();
-
-    EXPECT_CALL(*surface_1, consume(mt::MirKeyboardEventMatches(*down_event))).Times(1);
-    EXPECT_CALL(*surface_2, consume(_)).Times(0);
-
-    dispatcher.start();
-
-    dispatcher.set_focus(surface_1);
-    EXPECT_TRUE(dispatcher.dispatch(*down_event));
-    dispatcher.set_focus(surface_2);
-    EXPECT_FALSE(dispatcher.dispatch(*up_event));
-}
-
-TEST_F(SurfaceInputDispatcher, inconsistent_key_down_dropped)
-{
-    auto surface = scene.add_surface();
-
-    FakeKeyboard keyboard;
-    auto event = keyboard.press();
-
-    InSequence seq;
-    EXPECT_CALL(*surface, consume(mt::MirKeyboardEventMatches(*event))).Times(1);
-
-    dispatcher.start();
-
-    dispatcher.set_focus(surface);
-    EXPECT_TRUE(dispatcher.dispatch(*event));
-    EXPECT_FALSE(dispatcher.dispatch(*event));
-    EXPECT_FALSE(dispatcher.dispatch(*event));
-}
-
-TEST_F(SurfaceInputDispatcher, device_reset_resets_key_state_consistency)
-{
-    auto surface = scene.add_surface();
-
-    auto device_id = MirInputDeviceId{1};
-    FakeKeyboard keyboard(device_id);
-    auto down_event = keyboard.press(11);
-    auto release_event = keyboard.release(11);
-
-    dispatcher.start();
-
-    dispatcher.set_focus(surface);
-    EXPECT_TRUE(dispatcher.dispatch(*down_event));
-    EXPECT_TRUE(dispatcher.dispatch(
-        *mev::make_event(mir_input_configuration_action_device_reset, device_id, std::chrono::nanoseconds{1})));
-    EXPECT_FALSE(dispatcher.dispatch(*release_event));
-}
-
-TEST_F(SurfaceInputDispatcher, key_input_target_may_disappear_and_things_remain_quote_a_unquote_ok)
-{
-    auto surface_2 = scene.add_surface();
-    auto surface_1 = scene.add_surface();
-
-    EXPECT_CALL(*surface_1, consume(_)).Times(AnyNumber());
-    EXPECT_CALL(*surface_2, consume(_)).Times(AnyNumber());
-
-    FakeKeyboard k;
-    auto an_ev = k.press(11);
-    auto another_ev = k.press(12);
-
-    dispatcher.start();
-    dispatcher.set_focus(surface_1);
-    EXPECT_TRUE(dispatcher.dispatch(*an_ev));
-    scene.remove_surface(surface_1);
-    EXPECT_FALSE(dispatcher.dispatch(*another_ev));
-    dispatcher.set_focus(surface_2);
-    EXPECT_TRUE(dispatcher.dispatch(*another_ev));
-}
-
 TEST_F(SurfaceInputDispatcher, pointer_motion_delivered_to_client_under_pointer)
 {
     auto surface = scene.add_surface({{0, 0}, {5, 5}});
@@ -385,7 +294,6 @@ TEST_F(SurfaceInputDispatcher, pointer_motion_delivered_to_client_under_pointer)
 
     InSequence seq;
     EXPECT_CALL(*surface, consume(mt::PointerEnterEvent())).Times(1);
-    EXPECT_CALL(*surface, consume(mt::PointerEventWithPosition(1, 0))).Times(1);
     EXPECT_CALL(*surface, consume(mt::PointerLeaveEvent())).Times(1);
 
     dispatcher.start();
@@ -403,10 +311,8 @@ TEST_F(SurfaceInputDispatcher, pointer_delivered_only_to_top_surface)
 
     InSequence seq;
     EXPECT_CALL(*top_surface, consume(mt::PointerEnterEvent())).Times(1);
-    EXPECT_CALL(*top_surface, consume(mt::PointerEventWithPosition(1, 0))).Times(1);
     EXPECT_CALL(*surface, consume(mt::PointerEnterEvent())).Times(1);
-    EXPECT_CALL(*surface, consume(mt::PointerEventWithPosition(1, 0))).Times(1);
-    
+
     dispatcher.start();
 
     EXPECT_TRUE(dispatcher.dispatch(*pointer.move_to({1, 0})));
@@ -425,12 +331,10 @@ TEST_F(SurfaceInputDispatcher, pointer_may_move_between_adjacent_surfaces)
 
     InSequence seq;
     EXPECT_CALL(*surface, consume(mt::PointerEnterEvent())).Times(1);
-    EXPECT_CALL(*surface, consume(mt::PointerEventWithPosition(1, 1))).Times(1);
     EXPECT_CALL(*surface, consume(mt::PointerLeaveEvent())).Times(1);
     EXPECT_CALL(*another_surface, consume(mt::PointerEnterEvent())).Times(1);
-    EXPECT_CALL(*another_surface, consume(mt::PointerEventWithPosition(1, 1))).Times(1);
     EXPECT_CALL(*another_surface, consume(mt::PointerLeaveEvent())).Times(1);
-    
+
     dispatcher.start();
 
     EXPECT_TRUE(dispatcher.dispatch(*pointer.move_to({1, 1})));
@@ -463,30 +367,6 @@ TEST_F(SurfaceInputDispatcher, gestures_persist_over_button_down)
     EXPECT_TRUE(dispatcher.dispatch(*ev_1));
     EXPECT_TRUE(dispatcher.dispatch(*ev_2));
     EXPECT_TRUE(dispatcher.dispatch(*ev_3));
-}
-
-TEST_F(SurfaceInputDispatcher, gestures_terminated_by_device_reset)
-{
-    auto surface = scene.add_surface({{0, 0}, {5, 5}});
-    auto another_surface = scene.add_surface({{5, 5}, {5, 5}});
-
-    MirInputDeviceId device_id{1};
-    FakePointer pointer(device_id);
-    auto ev_1 = pointer.press_button({0, 0});
-    auto ev_2 = pointer.move_to({6, 6});
-
-    InSequence seq;
-    EXPECT_CALL(*surface, consume(mt::PointerEnterEvent())).Times(1);
-    EXPECT_CALL(*surface, consume(mt::ButtonDownEvent(0,0))).Times(1);
-    EXPECT_CALL(*another_surface, consume(mt::PointerEnterEvent())).Times(1);
-    EXPECT_CALL(*another_surface, consume(mt::PointerEventWithPosition(1, 1))).Times(1);
-    
-    dispatcher.start();
-
-    EXPECT_TRUE(dispatcher.dispatch(*ev_1));
-    EXPECT_TRUE(dispatcher.dispatch(
-        *mev::make_event(mir_input_configuration_action_device_reset, device_id, std::chrono::nanoseconds{1})));
-    EXPECT_TRUE(dispatcher.dispatch(*ev_2));
 }
 
 TEST_F(SurfaceInputDispatcher, pointer_gestures_may_transfer_over_buttons)
@@ -534,8 +414,7 @@ TEST_F(SurfaceInputDispatcher, pointer_gesture_target_may_vanish_and_the_situati
     EXPECT_CALL(*surface, consume(mt::PointerEnterEvent())).Times(1);
     EXPECT_CALL(*surface, consume(mt::ButtonDownEvent(0,0))).Times(1);
     EXPECT_CALL(*another_surface, consume(mt::PointerEnterEvent())).Times(1);
-    EXPECT_CALL(*another_surface, consume(mt::PointerEventWithPosition(1,1))).Times(1);
-    
+
     dispatcher.start();
 
     EXPECT_TRUE(dispatcher.dispatch(*ev_1));
@@ -649,26 +528,6 @@ TEST_F(SurfaceInputDispatcher, touch_gestures_terminated_by_release_all_touches)
     EXPECT_TRUE(dispatcher.dispatch(*toucher.touches_at({5, 5}, {6, 6})));
     EXPECT_TRUE(dispatcher.dispatch(*toucher.releases_at({5, 5}, {6, 6})));
     EXPECT_FALSE(dispatcher.dispatch(*toucher.move_to({5, 6})));
-}
-
-TEST_F(SurfaceInputDispatcher, touch_gestures_terminated_by_device_reset)
-{
-    auto left_surface = scene.add_surface({{0, 0}, {1, 1}});
-    auto right_surface = scene.add_surface({{1, 1}, {1, 1}});
-
-    MirInputDeviceId device_id{1};
-    FakeToucher toucher(device_id);
-
-    InSequence seq;
-    EXPECT_CALL(*left_surface, consume(mt::TouchEvent(0, 0))).Times(1);
-    EXPECT_CALL(*right_surface, consume(mt::TouchEvent(0, 0))).Times(1);
-
-    dispatcher.start();
-    
-    EXPECT_TRUE(dispatcher.dispatch(*toucher.touch_at({0, 0})));
-    EXPECT_TRUE(dispatcher.dispatch(
-        *mev::make_event(mir_input_configuration_action_device_reset, device_id, std::chrono::nanoseconds{1})));
-    EXPECT_TRUE(dispatcher.dispatch(*toucher.touch_at({1, 1})));
 }
 
 TEST_F(SurfaceInputDispatcher, touch_gesture_target_may_vanish_but_things_continue_to_function_as_intended)

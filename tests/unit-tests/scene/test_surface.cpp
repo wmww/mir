@@ -92,8 +92,8 @@ TEST(SurfaceCreationParametersTest, builder_mutators)
     mg::BufferUsage const usage{mg::BufferUsage::hardware};
     MirPixelFormat const format{mir_pixel_format_abgr_8888};
     std::string name{"surface"};
-    MirSurfaceState state{mir_surface_state_fullscreen};
-    MirSurfaceType type{mir_surface_type_dialog};
+    MirWindowState state{mir_window_state_fullscreen};
+    MirWindowType type{mir_window_type_dialog};
     MirOrientationMode mode{mir_orientation_mode_landscape};
     mf::SurfaceId surf_id{1000};
 
@@ -193,7 +193,8 @@ struct SurfaceCreation : public ::testing::Test
 {
     SurfaceCreation()
         : surface(surface_name,
-            rect, false, mock_buffer_stream, 
+            rect, mir_pointer_unconfined,
+            streams,
             std::make_shared<mtd::StubInputChannel>(),
             std::make_shared<mtd::StubInputSender>(),
             nullptr /* cursor_image */, report)
@@ -215,6 +216,7 @@ struct SurfaceCreation : public ::testing::Test
     }
 
     std::shared_ptr<testing::NiceMock<mtd::MockBufferStream>> mock_buffer_stream = std::make_shared<testing::NiceMock<mtd::MockBufferStream>>();
+    std::list<ms::StreamInfo> streams{ { mock_buffer_stream, {}, {} } }; 
     std::function<void()> change_notification;
     int notification_count = 0;
     mtd::StubBuffer stub_buffer;
@@ -238,12 +240,6 @@ TEST_F(SurfaceCreation, test_surface_gets_right_name)
 TEST_F(SurfaceCreation, test_surface_queries_state_for_size)
 {
     EXPECT_EQ(size, surface.size());
-}
-
-TEST_F(SurfaceCreation, constructed_stream_is_primary)
-{
-    using namespace testing;
-    EXPECT_THAT(surface.primary_buffer_stream(), Eq(mock_buffer_stream));
 }
 
 TEST_F(SurfaceCreation, test_surface_gets_top_left)
@@ -382,8 +378,8 @@ TEST_F(SurfaceCreation, input_fds)
     ms::BasicSurface input_surf(
         surface_name,
         rect,
-        false,
-        mock_buffer_stream,
+        mir_pointer_unconfined,
+        streams,
         mt::fake_shared(channel),
         std::make_shared<mtd::StubInputSender>(),
         std::shared_ptr<mg::CursorImage>(),
@@ -400,8 +396,8 @@ TEST_F(SurfaceCreation, consume_calls_send_event)
     ms::BasicSurface surface(
         surface_name,
         rect,
-        false,
-        mock_buffer_stream,
+        mir_pointer_unconfined,
+        streams,
         std::make_shared<mtd::StubInputChannel>(),
         mt::fake_shared(mock_sender),
         std::shared_ptr<mg::CursorImage>(),
@@ -414,8 +410,8 @@ TEST_F(SurfaceCreation, consume_calls_send_event)
     mev::add_touch(*touch_event, 0, mir_touch_action_down, mir_touch_tooltype_finger, 0, 0,
         0, 0, 0, 0);
 
-    EXPECT_CALL(mock_sender, send_event(mt::MirKeyboardEventMatches(*key_event), _)).Times(1);
-    EXPECT_CALL(mock_sender, send_event(mt::MirTouchEventMatches(*touch_event), _)).Times(1);
+    EXPECT_CALL(mock_sender, send_event(mt::MirKeyboardEventMatches(key_event.get()), _)).Times(1);
+    EXPECT_CALL(mock_sender, send_event(mt::MirTouchEventMatches(touch_event.get()), _)).Times(1);
 
     surface.consume(key_event.get());
     surface.consume(touch_event.get());

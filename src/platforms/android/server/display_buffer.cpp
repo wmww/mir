@@ -79,7 +79,7 @@ void mga::DisplayBuffer::release_current()
     gl_context.release_current();
 }
 
-bool mga::DisplayBuffer::post_renderables_if_optimizable(RenderableList const& renderlist)
+bool mga::DisplayBuffer::overlay(RenderableList const& renderlist)
 {
     if (!overlay_enabled ||
         !display_device->compatible_renderlist(renderlist) ||
@@ -103,6 +103,10 @@ void mga::DisplayBuffer::swap_buffers()
         gl_context.swap_buffers();
 }
 
+void mga::DisplayBuffer::bind()
+{
+}
+
 MirOrientation mga::DisplayBuffer::orientation() const
 {
     /*
@@ -112,6 +116,11 @@ MirOrientation mga::DisplayBuffer::orientation() const
      * If and when we choose to implement HWC rotation, this may change.
      */
     return orientation_;
+}
+
+MirMirrorMode mga::DisplayBuffer::mirror_mode() const
+{
+    return mir_mirror_mode_none;
 }
 
 void mga::DisplayBuffer::configure(MirPowerMode power_mode, MirOrientation orientation, geom::Displacement offset)

@@ -21,19 +21,32 @@
 #include "mir/dispatch/action_queue.h"
 #include "mir/input/device_capability.h"
 #include "mir/input/input_device.h"
-#include "mir/input/touchpad_configuration.h"
-#include "mir/input/pointer_configuration.h"
+#include "mir/input/mir_touchpad_config.h"
+#include "mir/input/mir_pointer_config.h"
+#include "mir/input/key_mapper.h"
 
 #include <boost/throw_exception.hpp>
 #include <stdexcept>
 
 namespace mi = mir::input;
 
-mi::DefaultDevice::DefaultDevice(MirInputDeviceId id, std::shared_ptr<dispatch::ActionQueue> const& actions,
-                                 InputDevice& device)
-    : device_id{id}, device{device}, info(device.get_device_info()), pointer{device.get_pointer_settings()},
-      touchpad{device.get_touchpad_settings()}, actions{actions}
+mi::DefaultDevice::DefaultDevice(MirInputDeviceId id,
+                                 std::shared_ptr<dispatch::ActionQueue> const& actions,
+                                 InputDevice& device,
+                                 std::shared_ptr<KeyMapper> const& key_mapper)
+    : device_id{id},
+      device{device},
+      info(device.get_device_info()),
+      pointer{device.get_pointer_settings()},
+      touchpad{device.get_touchpad_settings()},
+      actions{actions},
+      key_mapper{key_mapper}
 {
+    if (contains(info.capabilities, mi::DeviceCapability::keyboard))
+    {
+        keyboard = MirKeyboardConfig{};
+        key_mapper->set_keymap_for_device(device_id, keyboard.value().device_keymap());
+    }
 }
 
 mi::DeviceCapabilities mi::DefaultDevice::capabilities() const
@@ -56,74 +69,116 @@ MirInputDeviceId mi::DefaultDevice::id() const
     return device_id;
 }
 
-mir::optional_value<mi::PointerConfiguration> mi::DefaultDevice::pointer_configuration() const
+mir::optional_value<MirPointerConfig> mi::DefaultDevice::pointer_configuration() const
 {
     if (!pointer.is_set())
         return {};
 
     auto const& settings = pointer.value();
 
-    return PointerConfiguration(settings.handedness, settings.acceleration,
-                                settings.cursor_acceleration_bias, settings.horizontal_scroll_scale,
-                                settings.vertical_scroll_scale);
+    return MirPointerConfig(settings.handedness, settings.acceleration,
+                            settings.cursor_acceleration_bias, settings.horizontal_scroll_scale,
+                            settings.vertical_scroll_scale);
 }
 
-mir::optional_value<mi::TouchpadConfiguration> mi::DefaultDevice::touchpad_configuration() const
+mir::optional_value<MirTouchpadConfig> mi::DefaultDevice::touchpad_configuration() const
 {
     if (!touchpad.is_set())
         return {};
 
     auto const& settings = touchpad.value();
 
-    return TouchpadConfiguration(settings.click_mode, settings.scroll_mode, settings.button_down_scroll_button,
-                                 settings.tap_to_click, settings.disable_while_typing, settings.disable_with_mouse,
-                                 settings.middle_mouse_button_emulation);
+    return MirTouchpadConfig(settings.click_mode, settings.scroll_mode, settings.button_down_scroll_button,
+                             settings.tap_to_click, settings.disable_while_typing, settings.disable_with_mouse,
+                             settings.middle_mouse_button_emulation);
 }
 
-void mi::DefaultDevice::apply_pointer_configuration(mi::PointerConfiguration const& conf)
+void mi::DefaultDevice::apply_pointer_configuration(MirPointerConfig const& conf)
 {
-    if (!pointer.is_set())
-        BOOST_THROW_EXCEPTION(std::invalid_argument("Cannot apply a pointer configuration"));
+    {
+        std::lock_guard<std::mutex> lock(config_mutex);
+        if (!pointer.is_set())
+            BOOST_THROW_EXCEPTION(std::invalid_argument("Cannot apply a pointer configuration"));
+    }
 
-    if (conf.cursor_acceleration_bias < -1.0 || conf.cursor_acceleration_bias > 1.0)
+    if (conf.cursor_acceleration_bias() < -1.0 || conf.cursor_acceleration_bias() > 1.0)
         BOOST_THROW_EXCEPTION(std::invalid_argument("Cursor acceleration bias out of range"));
 
     PointerSettings settings;
-    settings.handedness = conf.handedness;
-    settings.acceleration = conf.acceleration;
-    settings.cursor_acceleration_bias = conf.cursor_acceleration_bias;
-    settings.vertical_scroll_scale = conf.vertical_scroll_scale;
-    settings.horizontal_scroll_scale = conf.horizontal_scroll_scale;
+    settings.handedness = conf.handedness();
+    settings.acceleration = conf.acceleration();
+    settings.cursor_acceleration_bias = conf.cursor_acceleration_bias();
+    settings.vertical_scroll_scale = conf.vertical_scroll_scale();
+    settings.horizontal_scroll_scale = conf.horizontal_scroll_scale();
 
-    pointer = settings;
-
-    actions->enqueue([settings = std::move(settings), dev=&device]
-                     {
-                         dev->apply_settings(settings);
-                     });
+    {
+        std::lock_guard<std::mutex> lock(config_mutex);
+        pointer = settings;
+        if (!actions) // device is disabled
+            return;
+        actions->enqueue([settings = std::move(settings), dev=&device]
+                         {
+                             dev->apply_settings(settings);
+                         });
+    }
 }
 
-void mi::DefaultDevice::apply_touchpad_configuration(mi::TouchpadConfiguration const& conf)
+void mi::DefaultDevice::apply_touchpad_configuration(MirTouchpadConfig const& conf)
 {
-    if (!touchpad.is_set())
-        BOOST_THROW_EXCEPTION(std::invalid_argument("Cannot apply a touchpad configuration"));
+    {
+        std::lock_guard<std::mutex> lock(config_mutex);
+        if (!touchpad.is_set())
+            BOOST_THROW_EXCEPTION(std::invalid_argument("Cannot apply a touchpad configuration"));
+    }
 
-    if (conf.scroll_mode & mir_touchpad_scroll_mode_button_down_scroll && conf.button_down_scroll_button == mi::no_scroll_button)
+    if (conf.scroll_mode() & mir_touchpad_scroll_mode_button_down_scroll &&
+        conf.button_down_scroll_button() == mi::no_scroll_button)
         BOOST_THROW_EXCEPTION(std::invalid_argument("No scroll button configured"));
 
     TouchpadSettings settings;
-    settings.click_mode = conf.click_mode;
-    settings.scroll_mode = conf.scroll_mode;
-    settings.button_down_scroll_button = conf.button_down_scroll_button;
-    settings.disable_with_mouse = conf.disable_with_mouse;
-    settings.disable_while_typing = conf.disable_while_typing;
-    settings.tap_to_click = conf.tap_to_click;
-    settings.middle_mouse_button_emulation = conf.middle_mouse_button_emulation;
+    settings.click_mode= conf.click_mode();
+    settings.scroll_mode = conf.scroll_mode();
+    settings.button_down_scroll_button = conf.button_down_scroll_button();
+    settings.disable_with_mouse = conf.disable_with_mouse();
+    settings.disable_while_typing = conf.disable_while_typing();
+    settings.tap_to_click = conf.tap_to_click();
+    settings.middle_mouse_button_emulation = conf.middle_mouse_button_emulation();
 
-    touchpad = settings;
+    {
+        std::lock_guard<std::mutex> lock(config_mutex);
+        touchpad = settings;
 
-    actions->enqueue([settings = std::move(settings), dev=&device]
-                     {
+        if (!actions) // device is disabled
+            return;
+        actions->enqueue([settings = std::move(settings), dev=&device]
+                         {
                          dev->apply_settings(settings);
-                     });
+                         });
+    }
+}
+
+mir::optional_value<MirKeyboardConfig> mi::DefaultDevice::keyboard_configuration() const
+{
+    return keyboard;
+}
+
+void mi::DefaultDevice::apply_keyboard_configuration(MirKeyboardConfig const& conf)
+{
+    if (!contains(info.capabilities, mi::DeviceCapability::keyboard))
+        BOOST_THROW_EXCEPTION(std::invalid_argument("Cannot apply a keyboard configuration"));
+
+    std::lock_guard<std::mutex> lock(config_mutex);
+    if (!actions) // device is disabled
+        return;
+    if (keyboard.value().device_keymap() != conf.device_keymap())
+        keyboard = conf;
+    else
+        return;
+    key_mapper->set_keymap_for_device(device_id, conf.device_keymap());
+}
+
+void mi::DefaultDevice::disable_queue()
+{
+    std::lock_guard<std::mutex> lock(config_mutex);
+    actions.reset();
 }

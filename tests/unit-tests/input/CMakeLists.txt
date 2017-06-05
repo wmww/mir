@@ -7,7 +7,9 @@ list(APPEND UNIT_TEST_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/test_cursor_controller.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_xcursor_loader.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_touchspot_controller.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/test_input_channel_factory.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_input_event.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/test_config_changer.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_event_builders.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_default_device.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_default_input_device_hub.cpp
@@ -16,6 +18,7 @@ list(APPEND UNIT_TEST_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/test_seat_input_device_tracker.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_key_repeat_dispatcher.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_validator.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/test_nested_input_platform.cpp
 )
 
 list(APPEND UMOCK_UNIT_TEST_SOURCES

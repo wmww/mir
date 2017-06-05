@@ -46,12 +46,18 @@ public:
     void handle_event(MirEvent const& e) override;
     void handle_lifecycle_event(MirLifecycleState state) override;
     void handle_display_config_change(graphics::DisplayConfiguration const& config) override;
-    void handle_input_device_change(std::vector<std::shared_ptr<mir::input::Device>> const& devices) override;
+    void handle_error(ClientVisibleError const& error) override;
+    void handle_input_config_change(MirInputConfig const& config) override;
     void send_ping(int32_t serial) override;
     void send_buffer(frontend::BufferStreamId id, graphics::Buffer& buffer, graphics::BufferIpcMsgType) override;
+    void add_buffer(graphics::Buffer&) override;
+    void error_buffer(geometry::Size, MirPixelFormat, std::string const&) override;
+    void remove_buffer(graphics::Buffer&) override;
+    void update_buffer(graphics::Buffer&) override;
 
 private:
     void send_event_sequence(protobuf::EventSequence&, FdSets const&);
+    void send_buffer(protobuf::EventSequence&, graphics::Buffer&, graphics::BufferIpcMsgType);
 
     std::shared_ptr<MessageSender> const sender;
     std::shared_ptr<graphics::PlatformIpcOperations> const buffer_packer;

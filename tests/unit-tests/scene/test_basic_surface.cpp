@@ -64,24 +64,13 @@ public:
 class MockSurfaceObserver : public ms::NullSurfaceObserver
 {
 public:
-    MOCK_METHOD2(attrib_changed, void(MirSurfaceAttrib, int));
+    MOCK_METHOD2(attrib_changed, void(MirWindowAttrib, int));
     MOCK_METHOD1(hidden_set_to, void(bool));
     MOCK_METHOD1(renamed, void(char const*));
     MOCK_METHOD0(client_surface_close_requested, void());
     MOCK_METHOD1(cursor_image_set_to, void(mir::graphics::CursorImage const& image));
     MOCK_METHOD0(cursor_image_removed, void());
 };
-
-void post_a_frame(ms::BasicSurface& surface)
-{
-    /*
-     * Make sure there's a frame ready. Otherwise visible()==false and the
-     * input_area will never report it containing anything for all the tests
-     * that use it.
-     */
-    mtd::StubBuffer buffer;
-    surface.primary_buffer_stream()->swap_buffers(&buffer, [&](mir::graphics::Buffer*){});
-}
 
 struct BasicSurfaceTest : public testing::Test
 {
@@ -99,12 +88,13 @@ struct BasicSurfaceTest : public testing::Test
         std::make_shared<ms::LegacySurfaceChangeNotification>(mock_change_cb, [this](int){mock_change_cb();});
     std::shared_ptr<mi::InputSender> const stub_input_sender = std::make_shared<mtd::StubInputSender>();
     testing::NiceMock<mtd::MockInputSender> mock_sender;
+    std::list<ms::StreamInfo> streams { { mock_buffer_stream, {}, {} } };
 
     ms::BasicSurface surface{
         name,
         rect,
-        false,
-        mock_buffer_stream,
+        mir_pointer_unconfined,
+        streams,
         std::shared_ptr<mi::InputChannel>(),
         stub_input_sender,
         std::shared_ptr<mg::CursorImage>(),
@@ -112,7 +102,9 @@ struct BasicSurfaceTest : public testing::Test
 
     BasicSurfaceTest()
     {
-        post_a_frame(surface);
+        // use an opaque pixel format by default
+        ON_CALL(*mock_buffer_stream, pixel_format())
+            .WillByDefault(testing::Return(mir_pixel_format_xrgb_8888));
     }
 };
 
@@ -127,11 +119,6 @@ TEST_F(BasicSurfaceTest, basics)
         EXPECT_FALSE(renderable->shaped());
 }
 
-TEST_F(BasicSurfaceTest, primary_buffer_stream)
-{
-    EXPECT_THAT(surface.primary_buffer_stream(), Eq(mock_buffer_stream));
-}
-
 TEST_F(BasicSurfaceTest, buffer_stream_ids_always_unique)
 {
     int const n = 10;
@@ -141,7 +128,9 @@ TEST_F(BasicSurfaceTest, buffer_stream_ids_always_unique)
     for (auto& surface : surfaces)
     {
         surface = std::make_unique<ms::BasicSurface>(
-                name, rect, false, std::make_shared<testing::NiceMock<mtd::MockBufferStream>>(),
+                name, rect, mir_pointer_unconfined,
+                std::list<ms::StreamInfo> {
+                    { std::make_shared<testing::NiceMock<mtd::MockBufferStream>>(), {}, {} } },
                 std::shared_ptr<mi::InputChannel>(), stub_input_sender,
                 std::shared_ptr<mg::CursorImage>(), report);
         for (auto& renderable : surface->generate_renderables(this))
@@ -160,7 +149,7 @@ TEST_F(BasicSurfaceTest, id_never_invalid)
     for (auto& surface : surfaces)
     {
         surface = std::make_unique<ms::BasicSurface>(
-                name, rect, false, mock_buffer_stream,
+                name, rect, mir_pointer_unconfined, streams,
                 std::shared_ptr<mi::InputChannel>(), stub_input_sender,
                 std::shared_ptr<mg::CursorImage>(), report);
 
@@ -175,7 +164,6 @@ TEST_F(BasicSurfaceTest, update_top_left)
         .Times(1);
 
     surface.add_observer(observer);
-    post_a_frame(surface);
 
     EXPECT_EQ(rect.top_left, surface.top_left());
 
@@ -192,7 +180,6 @@ TEST_F(BasicSurfaceTest, update_size)
         .Times(1);
 
     surface.add_observer(observer);
-    post_a_frame(surface);
 
     EXPECT_EQ(rect.size, surface.size());
     EXPECT_NE(new_size, surface.size());
@@ -233,7 +220,6 @@ TEST_F(BasicSurfaceTest, test_surface_set_transformation_updates_transform)
         .Times(1);
 
     surface.add_observer(observer);
-    post_a_frame(surface);
 
     auto renderables = surface.generate_renderables(compositor_id);
     ASSERT_THAT(renderables.size(), testing::Eq(1));
@@ -258,7 +244,6 @@ TEST_F(BasicSurfaceTest, test_surface_set_alpha_notifies_changes)
         .Times(1);
 
     surface.add_observer(observer);
-    post_a_frame(surface);
 
     float alpha = 0.5f;
     surface.set_alpha(0.5f);
@@ -287,8 +272,8 @@ TEST_F(BasicSurfaceTest, test_surface_visibility)
     ms::BasicSurface surface{
         name,
         rect,
-        false,
-        mock_buffer_stream,
+        mir_pointer_unconfined,
+        streams,
         std::shared_ptr<mi::InputChannel>(),
         stub_input_sender,
         std::shared_ptr<mg::CursorImage>(),
@@ -315,7 +300,6 @@ TEST_F(BasicSurfaceTest, test_surface_hidden_notifies_changes)
         .Times(1);
 
     surface.add_observer(observer);
-    post_a_frame(surface);
 
     surface.set_hidden(true);
 }
@@ -328,15 +312,14 @@ TEST_F(BasicSurfaceTest, default_region_is_surface_rectangle)
     ms::BasicSurface surface{
         name,
         geom::Rectangle{pt, one_by_one},
-        false,
-        mock_buffer_stream,
+        mir_pointer_unconfined,
+        streams,
         std::shared_ptr<mi::InputChannel>(),
         stub_input_sender,
         std::shared_ptr<mg::CursorImage>(),
         report};
 
     surface.add_observer(observer);
-    post_a_frame(surface);
 
     std::vector<geom::Point> contained_pt
     {
@@ -370,8 +353,8 @@ TEST_F(BasicSurfaceTest, default_invisible_surface_doesnt_get_input)
     ms::BasicSurface surface{
         name,
         geom::Rectangle{{0,0}, {100,100}},
-        false,
-        mock_buffer_stream,
+        mir_pointer_unconfined,
+        streams,
         std::shared_ptr<mi::InputChannel>(),
         stub_input_sender,
         std::shared_ptr<mg::CursorImage>(),
@@ -510,8 +493,8 @@ TEST_F(BasicSurfaceTest, stores_parent)
         name,
         geom::Rectangle{{0,0}, {100,100}},
         parent,
-        false,
-        mock_buffer_stream,
+        mir_pointer_unconfined,
+        streams,
         std::shared_ptr<mi::InputChannel>(),
         stub_input_sender,
         std::shared_ptr<mg::CursorImage>(),
@@ -525,7 +508,7 @@ namespace
 
 struct AttributeTestParameters
 {
-    MirSurfaceAttrib attribute;
+    MirWindowAttrib attribute;
     int default_value;
     int a_valid_value;
     int an_invalid_value;
@@ -537,44 +520,44 @@ struct BasicSurfaceAttributeTest : public BasicSurfaceTest,
 };
 
 AttributeTestParameters const surface_visibility_test_parameters{
-    mir_surface_attrib_visibility,
-    mir_surface_visibility_occluded,
-    mir_surface_visibility_exposed,
+    mir_window_attrib_visibility,
+    mir_window_visibility_occluded,
+    mir_window_visibility_exposed,
     -1
 };
 
 AttributeTestParameters const surface_type_test_parameters{
-    mir_surface_attrib_type,
-    mir_surface_type_normal,
-    mir_surface_type_freestyle,
+    mir_window_attrib_type,
+    mir_window_type_normal,
+    mir_window_type_freestyle,
     -1
 };
 
 AttributeTestParameters const surface_state_test_parameters{
-    mir_surface_attrib_state,
-    mir_surface_state_restored,
-    mir_surface_state_fullscreen,
+    mir_window_attrib_state,
+    mir_window_state_restored,
+    mir_window_state_fullscreen,
     1178312
 };
 
 AttributeTestParameters const surface_swapinterval_test_parameters{
-    mir_surface_attrib_swapinterval,
+    mir_window_attrib_swapinterval,
     1,
     0,
     -1
 };
 
 AttributeTestParameters const surface_dpi_test_parameters{
-    mir_surface_attrib_dpi,
+    mir_window_attrib_dpi,
     0,
     90,
     -1
 };
 
 AttributeTestParameters const surface_focus_test_parameters{
-    mir_surface_attrib_focus,
-    mir_surface_unfocused,
-    mir_surface_focused,
+    mir_window_attrib_focus,
+    mir_window_focus_state_unfocused,
+    mir_window_focus_state_focused,
     -1
 };
 
@@ -697,8 +680,8 @@ TEST_F(BasicSurfaceTest, calls_send_event_on_consume)
     ms::BasicSurface surface{
         name,
         rect,
-        false,
-        mock_buffer_stream,
+        mir_pointer_unconfined,
+        streams,
         std::shared_ptr<mi::InputChannel>(),
         mt::fake_shared(mock_sender),
         nullptr,
@@ -811,10 +794,10 @@ TEST_F(BasicSurfaceTest, adds_buffer_streams)
     auto buffer_stream2 = std::make_shared<NiceMock<mtd::MockBufferStream>>();
 
     std::list<ms::StreamInfo> streams = {
-        { mock_buffer_stream, {0,0}},
-        { buffer_stream0, d0 },
-        { buffer_stream1, d1 },
-        { buffer_stream2, d2 }
+        { mock_buffer_stream, {0,0}, {}},
+        { buffer_stream0, d0, {} },
+        { buffer_stream1, d1, {} },
+        { buffer_stream2, d2, {} }
     };
     surface.set_streams(streams);
 
@@ -835,8 +818,8 @@ TEST_F(BasicSurfaceTest, moving_surface_repositions_all_associated_streams)
     auto buffer_stream = std::make_shared<NiceMock<mtd::MockBufferStream>>();
 
     std::list<ms::StreamInfo> streams = {
-        { mock_buffer_stream, {0,0} },
-        { buffer_stream, d } 
+        { mock_buffer_stream, {0,0}, {} },
+        { buffer_stream, d, {} } 
     };
 
     surface.set_streams(streams);
@@ -868,8 +851,8 @@ TEST_F(BasicSurfaceTest, can_set_streams_not_containing_originally_created_with_
     auto buffer_stream0 = std::make_shared<NiceMock<mtd::MockBufferStream>>();
     auto buffer_stream1 = std::make_shared<NiceMock<mtd::MockBufferStream>>();
     std::list<ms::StreamInfo> streams = {
-        { buffer_stream0, {0,0} },
-        { buffer_stream1, {0,0} }
+        { buffer_stream0, {0,0}, {} },
+        { buffer_stream1, {0,0}, {} }
     };
     surface.set_streams(streams);
     auto renderables = surface.generate_renderables(this);
@@ -909,18 +892,18 @@ TEST_F(BasicSurfaceTest, stream_observers_are_added_and_removed_appropriately)
         .InSequence(seq1);
 
     std::list<ms::StreamInfo> streams = {
-        { buffer_stream0, {0,0} },
-        { buffer_stream1, {0,0} },
+        { buffer_stream0, {0,0}, {} },
+        { buffer_stream1, {0,0}, {} },
     };
     surface.set_streams(streams);
 
-    streams = { { buffer_stream0, {0,0} } };
+    streams = { { buffer_stream0, {0,0}, {} } };
     surface.set_streams(streams);
 
-    streams = { { buffer_stream1, {0,0} } };
+    streams = { { buffer_stream1, {0,0}, {} } };
     surface.set_streams(streams);
 
-    streams = { { buffer_stream0, {0,0} } };
+    streams = { { buffer_stream0, {0,0}, {} } };
     surface.set_streams(streams);
 }
 
@@ -929,17 +912,17 @@ TEST_F(BasicSurfaceTest, showing_brings_all_streams_up_to_date)
     using namespace testing;
     auto buffer_stream = std::make_shared<NiceMock<mtd::MockBufferStream>>();
     std::list<ms::StreamInfo> streams = {
-        { mock_buffer_stream, {0,0} },
-        { buffer_stream, {0,0} }
+        { mock_buffer_stream, {0,0}, {} },
+        { buffer_stream, {0,0}, {} }
     };
     surface.set_streams(streams);
 
     EXPECT_CALL(*buffer_stream, drop_old_buffers()).Times(Exactly(1));
     EXPECT_CALL(*mock_buffer_stream, drop_old_buffers()).Times(Exactly(1));
 
-    surface.configure(mir_surface_attrib_visibility, mir_surface_visibility_occluded);
-    surface.configure(mir_surface_attrib_visibility, mir_surface_visibility_exposed);
-    surface.configure(mir_surface_attrib_visibility, mir_surface_visibility_exposed);
+    surface.configure(mir_window_attrib_visibility, mir_window_visibility_occluded);
+    surface.configure(mir_window_attrib_visibility, mir_window_visibility_exposed);
+    surface.configure(mir_window_attrib_visibility, mir_window_visibility_exposed);
 }
 
 //TODO: per-stream alpha and swapinterval seems useful
@@ -950,8 +933,8 @@ TEST_F(BasicSurfaceTest, changing_alpha_effects_all_streams)
     
     auto buffer_stream = std::make_shared<NiceMock<mtd::MockBufferStream>>();
     std::list<ms::StreamInfo> streams = {
-        { mock_buffer_stream, {0,0} },
-        { buffer_stream, {0,0} }
+        { mock_buffer_stream, {0,0}, {} },
+        { buffer_stream, {0,0}, {} }
     };
 
     surface.set_streams(streams);
@@ -967,7 +950,7 @@ TEST_F(BasicSurfaceTest, changing_alpha_effects_all_streams)
     EXPECT_THAT(renderables[1], IsRenderableOfAlpha(alpha));
 }
 
-TEST_F(BasicSurfaceTest, DISABLED_setting_streams_with_size_changes_sizes)
+TEST_F(BasicSurfaceTest, setting_streams_with_size_changes_sizes)
 {
     using namespace testing;
    
@@ -980,8 +963,8 @@ TEST_F(BasicSurfaceTest, DISABLED_setting_streams_with_size_changes_sizes)
     ON_CALL(*buffer_stream, stream_size())
         .WillByDefault(Return(bad_size));
     std::list<ms::StreamInfo> streams = {
-        { mock_buffer_stream, {0,0} },
-        { buffer_stream, {0,0} }
+        { mock_buffer_stream, {0,0}, size0 },
+        { buffer_stream, {0,0}, size1 }
     };
 
     surface.set_streams(streams);
@@ -997,15 +980,15 @@ TEST_F(BasicSurfaceTest, changing_inverval_effects_all_streams)
     
     auto buffer_stream = std::make_shared<NiceMock<mtd::MockBufferStream>>();
     std::list<ms::StreamInfo> streams = {
-        { mock_buffer_stream, {0,0} },
-        { buffer_stream, {0,0} }
+        { mock_buffer_stream, {0,0}, {} },
+        { buffer_stream, {0,0}, {} }
     };
 
     EXPECT_CALL(*mock_buffer_stream, allow_framedropping(true));
     EXPECT_CALL(*buffer_stream, allow_framedropping(true));
 
     surface.set_streams(streams);
-    surface.configure(mir_surface_attrib_swapinterval, 0);
+    surface.configure(mir_window_attrib_swapinterval, 0);
 }
 
 TEST_F(BasicSurfaceTest, visibility_matches_produced_list)
@@ -1020,8 +1003,8 @@ TEST_F(BasicSurfaceTest, visibility_matches_produced_list)
     ON_CALL(*mock_buffer_stream1, has_submitted_buffer())
         .WillByDefault(Invoke([&stream2_visible] { return stream2_visible; }));
     std::list<ms::StreamInfo> streams = {
-        { mock_buffer_stream, {0,0} },
-        { mock_buffer_stream1, displacement },
+        { mock_buffer_stream, {0,0}, {} },
+        { mock_buffer_stream1, displacement, {} },
     };
     surface.set_streams(streams);
 
@@ -1059,9 +1042,9 @@ TEST_F(BasicSurfaceTest, buffers_ready_correctly_reported)
         .WillOnce(Return(1));
 
     std::list<ms::StreamInfo> streams = {
-        { mock_buffer_stream, {0,0} },
-        { buffer_stream0, {0,0} },
-        { buffer_stream1, {0,0} },
+        { mock_buffer_stream, {0,0}, {} },
+        { buffer_stream0, {0,0}, {} },
+        { buffer_stream1, {0,0}, {} },
     };
     surface.set_streams(streams);
     EXPECT_THAT(surface.buffers_ready_for_compositor(this), Eq(3));
@@ -1083,8 +1066,8 @@ TEST_F(BasicSurfaceTest, buffer_streams_produce_correctly_sized_renderables)
         .WillByDefault(Return(size1));
 
     std::list<ms::StreamInfo> streams = {
-        { mock_buffer_stream, d0 },
-        { buffer_stream, d1 },
+        { mock_buffer_stream, d0, {} },
+        { buffer_stream, d1, {} },
     };
     surface.set_streams(streams);
 
@@ -1094,17 +1077,38 @@ TEST_F(BasicSurfaceTest, buffer_streams_produce_correctly_sized_renderables)
     EXPECT_THAT(renderables[1], IsRenderableOfSize(size1));
 }
 
+TEST_F(BasicSurfaceTest, renderables_of_transparent_buffer_streams_are_shaped)
+{
+    using namespace testing;
+    auto buffer_stream = std::make_shared<NiceMock<mtd::MockBufferStream>>();
+    geom::Displacement d0{0,0};
+    geom::Displacement d1{19,99};
+    ON_CALL(*buffer_stream, pixel_format())
+        .WillByDefault(Return(mir_pixel_format_argb_8888));
+
+    std::list<ms::StreamInfo> streams = {
+        { mock_buffer_stream, d0, {} },
+        { buffer_stream, d1, {} },
+    };
+    surface.set_streams(streams);
+
+    auto renderables = surface.generate_renderables(this);
+    ASSERT_THAT(renderables.size(), Eq(2));
+    EXPECT_THAT(renderables[0]->shaped(), false);
+    EXPECT_THAT(renderables[1]->shaped(), true);
+}
+
 namespace
 {
 struct VisibilityObserver : ms::NullSurfaceObserver
 {
-    void attrib_changed(MirSurfaceAttrib attrib, int value) override
+    void attrib_changed(MirWindowAttrib attrib, int value) override
     {
-        if (attrib == mir_surface_attrib_visibility)
+        if (attrib == mir_window_attrib_visibility)
         {
-            if (value == mir_surface_visibility_occluded)
+            if (value == mir_window_visibility_occluded)
                 hides_++;
-            else if (value == mir_surface_visibility_exposed)
+            else if (value == mir_window_visibility_exposed)
                 exposes_++;
         }
     }
@@ -1130,8 +1134,7 @@ TEST_F(BasicSurfaceTest, notifies_when_first_visible)
 
     EXPECT_THAT(observer->exposes(), Eq(0));
     EXPECT_THAT(observer->hides(), Eq(0));
-    post_a_frame(surface);
-    surface.configure(mir_surface_attrib_visibility, mir_surface_visibility_exposed);
+    surface.configure(mir_window_attrib_visibility, mir_window_visibility_exposed);
 
     EXPECT_THAT(observer->exposes(), Eq(1));
     EXPECT_THAT(observer->hides(), Eq(0));

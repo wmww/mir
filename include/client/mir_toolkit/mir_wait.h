@@ -19,6 +19,7 @@
 #define MIR_TOOLKIT_MIR_WAIT_H_
 
 #include <mir_toolkit/client_types.h>
+#include <mir_toolkit/deprecations.h>
 
 #ifdef __cplusplus
 /**
@@ -32,19 +33,22 @@ struct MirWaitHandle;
 
 /**
  * Wait on the supplied handle until all instances of the associated request
- * have completed.
+ * have completed. Returns immediately if zero are pending.
  *   \param [in] wait_handle  Handle returned by an asynchronous request
  */
-void mir_wait_for(MirWaitHandle *wait_handle);
+void mir_wait_for(MirWaitHandle *wait_handle)
+MIR_FOR_REMOVAL_IN_VERSION_1("No longer supported - use callbacks or wait for state changes");
 
 /**
  * Wait on the supplied handle until one instance of the associated request
  * has completed. Use this instead of mir_wait_for in a threaded environment
  * to ensure that the act of waiting does not clear all results associated
- * with the wait handle; only one.
+ * with the wait handle; only one. Unlike mir_wait_for, this function does
+ * not return if zero are pending and instead waits for one.
  *   \param [in] wait_handle  Handle returned by an asynchronous request
  */
-void mir_wait_for_one(MirWaitHandle *wait_handle);
+void mir_wait_for_one(MirWaitHandle *wait_handle)
+MIR_FOR_REMOVAL_IN_VERSION_1("No longer supported - use callbacks or wait for state changes");
 
 
 #ifdef __cplusplus

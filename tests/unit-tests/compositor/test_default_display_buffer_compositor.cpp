@@ -21,7 +21,7 @@
 #include "mir/compositor/decoration.h"
 #include "src/server/report/null_report_factory.h"
 #include "mir/compositor/scene.h"
-#include "mir/compositor/renderer.h"
+#include "mir/renderer/renderer.h"
 #include "mir/geometry/rectangle.h"
 #include "mir/test/doubles/mock_renderer.h"
 #include "mir/test/fake_shared.h"
@@ -100,9 +100,11 @@ struct DefaultDisplayBufferCompositor : public testing::Test
         using namespace testing;
         ON_CALL(display_buffer, orientation())
             .WillByDefault(Return(mir_orientation_normal));
+        ON_CALL(display_buffer, mirror_mode())
+            .WillByDefault(Return(mir_mirror_mode_none));
         ON_CALL(display_buffer, view_area())
             .WillByDefault(Return(screen));
-        ON_CALL(display_buffer, post_renderables_if_optimizable(_))
+        ON_CALL(display_buffer, overlay(_))
             .WillByDefault(Return(false));
     }
 
@@ -138,7 +140,7 @@ TEST_F(DefaultDisplayBufferCompositor, optimization_skips_composition)
     Sequence seq;
     EXPECT_CALL(*report, began_frame(_))
         .InSequence(seq);
-    EXPECT_CALL(display_buffer, post_renderables_if_optimizable(_))
+    EXPECT_CALL(display_buffer, overlay(_))
         .InSequence(seq)
         .WillOnce(Return(true));
     EXPECT_CALL(*report, renderables_in_frame(_,_))
@@ -168,7 +170,7 @@ TEST_F(DefaultDisplayBufferCompositor, rendering_reports_everything)
     Sequence seq;
     EXPECT_CALL(*report, began_frame(_))
         .InSequence(seq);
-    EXPECT_CALL(display_buffer, post_renderables_if_optimizable(_))
+    EXPECT_CALL(display_buffer, overlay(_))
         .InSequence(seq)
         .WillOnce(Return(false));
     EXPECT_CALL(*report, renderables_in_frame(_,_))
@@ -195,9 +197,10 @@ TEST_F(DefaultDisplayBufferCompositor, calls_renderer_in_sequence)
     EXPECT_CALL(mock_renderer, suspend())
         .Times(0);
     EXPECT_CALL(display_buffer, orientation())
-        .InSequence(render_seq)
         .WillOnce(Return(mir_orientation_normal));
-    EXPECT_CALL(mock_renderer, set_rotation(_))
+    EXPECT_CALL(display_buffer, mirror_mode())
+        .WillOnce(Return(mir_mirror_mode_none));
+    EXPECT_CALL(mock_renderer, set_output_transform(mir_orientation_normal, mir_mirror_mode_none))
         .InSequence(render_seq);
     EXPECT_CALL(mock_renderer, render(ContainerEq(mg::RenderableList{big, small})))
         .InSequence(render_seq);
@@ -220,30 +223,32 @@ TEST_F(DefaultDisplayBufferCompositor, optimization_toggles_seamlessly)
         .WillByDefault(Return(screen));
     ON_CALL(display_buffer, orientation())
         .WillByDefault(Return(mir_orientation_normal));
+    ON_CALL(display_buffer, mirror_mode())
+            .WillByDefault(Return(mir_mirror_mode_none));
 
     Sequence seq;
-    EXPECT_CALL(display_buffer, post_renderables_if_optimizable(_))
+    EXPECT_CALL(display_buffer, overlay(_))
         .InSequence(seq)
         .WillOnce(Return(false));
 
     EXPECT_CALL(display_buffer, orientation())
         .InSequence(seq);
-    EXPECT_CALL(mock_renderer, set_rotation(mir_orientation_normal))
+    EXPECT_CALL(mock_renderer, set_output_transform(mir_orientation_normal, mir_mirror_mode_none))
         .InSequence(seq);
     EXPECT_CALL(mock_renderer, render(IsEmpty()))
         .InSequence(seq);
 
-    EXPECT_CALL(display_buffer, post_renderables_if_optimizable(_))
+    EXPECT_CALL(display_buffer, overlay(_))
         .InSequence(seq)
         .WillOnce(Return(true));
     //we should be testing that post_buffer is called, not just that
     //we check the bits on the compositor buffer
-    EXPECT_CALL(display_buffer, post_renderables_if_optimizable(_))
+    EXPECT_CALL(display_buffer, overlay(_))
         .InSequence(seq)
         .WillOnce(Return(false));
     EXPECT_CALL(display_buffer, orientation())
         .InSequence(seq);
-    EXPECT_CALL(mock_renderer, set_rotation(mir_orientation_normal))
+    EXPECT_CALL(mock_renderer, set_output_transform(mir_orientation_normal, mir_mirror_mode_none))
         .InSequence(seq);
     EXPECT_CALL(mock_renderer, render(IsEmpty()))
         .InSequence(seq);
@@ -267,7 +272,9 @@ TEST_F(DefaultDisplayBufferCompositor, occluded_surfaces_are_not_rendered)
         .WillRepeatedly(Return(screen));
     EXPECT_CALL(display_buffer, orientation())
         .WillOnce(Return(mir_orientation_normal));
-    EXPECT_CALL(display_buffer, post_renderables_if_optimizable(_))
+    EXPECT_CALL(display_buffer, mirror_mode())
+        .WillOnce(Return(mir_mirror_mode_none));
+    EXPECT_CALL(display_buffer, overlay(_))
         .WillRepeatedly(Return(false));
 
     auto window0 = std::make_shared<mtd::FakeRenderable>(geom::Rectangle{{99,99},{2,2}});
