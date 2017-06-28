@@ -39,26 +39,27 @@ struct MockBufferMap : mf::ClientBuffers
     MOCK_METHOD1(remove_buffer, void(mg::BufferID id));
     MOCK_METHOD1(receive_buffer, void(mg::BufferID id));
     MOCK_METHOD1(send_buffer, void(mg::BufferID id));
-    MOCK_METHOD1(at, std::shared_ptr<mg::Buffer>&(mg::BufferID));
     MOCK_CONST_METHOD0(client_owned_buffer_count, size_t());
-    std::shared_ptr<mg::Buffer>& operator[](mg::BufferID id) { return at(id); }
+    MOCK_CONST_METHOD1(get, std::shared_ptr<mg::Buffer>(mg::BufferID));
 };
 
 struct FixedSchedule : mc::Schedule
 {
-    void schedule(std::shared_ptr<mg::Buffer> const&)
+    void schedule(std::shared_ptr<mg::Buffer> const&) override
     {
         throw std::runtime_error("this stub doesnt support this");
     }
-    void cancel(std::shared_ptr<mg::Buffer> const&)
+    std::future<void> schedule_nonblocking(
+        std::shared_ptr<mg::Buffer> const&) override
     {
         throw std::runtime_error("this stub doesnt support this");
+        return {};
     }
-    unsigned int num_scheduled()
+    unsigned int num_scheduled() override
     {
         return sched.size() - current;
     }
-    std::shared_ptr<mg::Buffer> next_buffer()
+    std::shared_ptr<mg::Buffer> next_buffer() override
     {
         if (sched.empty() || current == sched.size())
             throw std::runtime_error("no buffer scheduled");
@@ -74,9 +75,9 @@ private:
     std::vector<std::shared_ptr<mg::Buffer>> sched;
 };
 
-struct MultiMonitorArbiterBase : Test
+struct MultiMonitorArbiter : Test
 {
-    MultiMonitorArbiterBase()
+    MultiMonitorArbiter()
     {
         for(auto i = 0u; i < num_buffers; i++)
             buffers.emplace_back(std::make_shared<mtd::StubBuffer>());
@@ -85,18 +86,7 @@ struct MultiMonitorArbiterBase : Test
     std::vector<std::shared_ptr<mg::Buffer>> buffers;
     NiceMock<MockBufferMap> mock_map;
     FixedSchedule schedule;
-};
-
-struct MultiMonitorArbiter : MultiMonitorArbiterBase
-{
-    mc::MultiMonitorMode guarantee{mc::MultiMonitorMode::multi_monitor_sync};
-    mc::MultiMonitorArbiter arbiter{guarantee, mt::fake_shared(mock_map), mt::fake_shared(schedule)};
-};
-
-struct MultiMonitorArbiterWithAnyFrameGuarantee : MultiMonitorArbiterBase
-{
-    mc::MultiMonitorMode guarantee{mc::MultiMonitorMode::single_monitor_fast};
-    mc::MultiMonitorArbiter arbiter{guarantee, mt::fake_shared(mock_map), mt::fake_shared(schedule)};
+    mc::MultiMonitorArbiter arbiter{mt::fake_shared(mock_map), mt::fake_shared(schedule)};
 };
 }
 
@@ -120,7 +110,7 @@ TEST_F(MultiMonitorArbiter, compositor_access)
     EXPECT_THAT(cbuffer, Eq(buffers[0]));
 }
 
-TEST_F(MultiMonitorArbiterWithAnyFrameGuarantee, compositor_release_sends_buffer_back_with_any_monitor_guarantee)
+TEST_F(MultiMonitorArbiter, compositor_release_sends_buffer_back)
 {
     EXPECT_CALL(mock_map, send_buffer(buffers[0]->id()));
 
@@ -131,7 +121,7 @@ TEST_F(MultiMonitorArbiterWithAnyFrameGuarantee, compositor_release_sends_buffer
     arbiter.compositor_release(cbuffer);
 }
 
-TEST_F(MultiMonitorArbiterWithAnyFrameGuarantee, compositor_can_acquire_different_buffers)
+TEST_F(MultiMonitorArbiter, compositor_can_acquire_different_buffers)
 {
     EXPECT_CALL(mock_map, send_buffer(buffers[0]->id()));
 
@@ -145,7 +135,7 @@ TEST_F(MultiMonitorArbiterWithAnyFrameGuarantee, compositor_can_acquire_differen
     Mock::VerifyAndClearExpectations(&mock_map);
 }
 
-TEST_F(MultiMonitorArbiterWithAnyFrameGuarantee, compositor_buffer_syncs_to_fastest_compositor)
+TEST_F(MultiMonitorArbiter, compositor_buffer_syncs_to_fastest_compositor)
 {
     int comp_id1{0};
     int comp_id2{0};
@@ -332,7 +322,7 @@ TEST_F(MultiMonitorArbiter, snapshotting_will_release_buffer_if_it_was_the_last_
     arbiter.snapshot_release(sbuffer1);
 }
 
-TEST_F(MultiMonitorArbiterWithAnyFrameGuarantee, compositor_can_acquire_a_few_times_and_only_sends_on_the_last_release)
+TEST_F(MultiMonitorArbiter, compositor_can_acquire_a_few_times_and_only_sends_on_the_last_release)
 {
     int comp_id1{0};
     int comp_id2{0};
@@ -557,7 +547,7 @@ TEST_F(MultiMonitorArbiter, checks_if_buffer_is_valid_after_clean_onscreen_buffe
 
 TEST_F(MultiMonitorArbiter, releases_buffer_on_destruction)
 {
-    mc::MultiMonitorArbiter arbiter{guarantee, mt::fake_shared(mock_map), mt::fake_shared(schedule)};
+    mc::MultiMonitorArbiter arbiter{mt::fake_shared(mock_map), mt::fake_shared(schedule)};
     EXPECT_CALL(mock_map, send_buffer(buffers[0]->id()));
     schedule.set_schedule({buffers[0]});
     arbiter.advance_schedule();

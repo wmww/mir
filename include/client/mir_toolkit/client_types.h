@@ -57,6 +57,13 @@ typedef struct MirBuffer MirBuffer;
 typedef struct MirRenderSurface MirRenderSurface;
 
 /**
+ * Opaque structure containing cursor parameterization. Create with mir_cursor* family.
+ * Used with mir_window_configure_cursor.
+ */
+typedef struct MirCursorConfiguration MirCursorConfiguration
+MIR_FOR_REMOVAL_IN_VERSION_1("Use mir_window_spec_set_cursor_name/mir_window_spec_set_cursor_render_surface instead");
+
+/**
  * Descriptor for an output connection.
  *
  *  Each MirOutput corresponds to a video output. This may be a physical connection on the system,
@@ -179,7 +186,7 @@ typedef enum MirBufferUsage
 {
     mir_buffer_usage_hardware = 1,
     mir_buffer_usage_software
-} MirBufferUsage;
+} MirBufferUsage MIR_FOR_REMOVAL_IN_VERSION_1("No longer applicable when using MirRenderSurface");
 
 /**
  * MirWindowParameters is the structure of minimum required information that
@@ -191,7 +198,11 @@ typedef struct MirSurfaceParameters
     int width;
     int height;
     MirPixelFormat pixel_format;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     MirBufferUsage buffer_usage;
+#pragma GCC diagnostic pop
+
     /**
      * The id of the output to place the surface in.
      *
@@ -394,8 +405,10 @@ typedef struct MirRectangle
 
 typedef struct MirInputConfig MirInputConfig;
 typedef struct MirInputDevice MirInputDevice;
+typedef struct MirKeyboardConfig MirKeyboardConfig;
 typedef struct MirPointerConfig MirPointerConfig;
 typedef struct MirTouchpadConfig MirTouchpadConfig;
+typedef struct MirTouchscreenConfig MirTouchscreenConfig;
 
 /**
  * MirScreencastParameters is the structure of required information that
@@ -533,7 +546,17 @@ typedef enum MirInputConfigurationError {
     /**
      * Input configuration was attempted but was rejected by driver
      */
-     mir_input_configuration_error_rejected_by_driver
+     mir_input_configuration_error_rejected_by_driver,
+
+    /**
+     * Client is not permitted to change global input configuration
+    */
+     mir_input_configuration_error_base_configuration_unauthorized,
+
+    /**
+     * Client is not permitted to change its input configuration
+     */
+     mir_input_configuration_error_unauthorized,
 } MirInputConfigurationError;
 
 typedef void (*MirErrorCallback)(
@@ -555,7 +578,8 @@ typedef void (*mir_surface_id_callback)(
     MirSurface* surface, MirPersistentId* id, void* context)
 MIR_FOR_REMOVAL_IN_VERSION_1("Use MirWindowIdCallback instead");
 
-typedef MirSurfaceParameters MirWindowParameters;
+typedef MirSurfaceParameters MirWindowParameters
+MIR_FOR_REMOVAL_IN_VERSION_1("Use mir_window_get_xxx apis or listen for attribute events instead");
 
 #pragma GCC diagnostic pop
 

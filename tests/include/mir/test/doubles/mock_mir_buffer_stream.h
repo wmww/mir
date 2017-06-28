@@ -19,7 +19,7 @@
 #ifndef MIR_TEST_DOUBLES_MOCK_MIR_BUFFER_STREAM_H_
 #define MIR_TEST_DOUBLES_MOCK_MIR_BUFFER_STREAM_H_
 
-#include "src/include/client/mir/mir_buffer_stream.h"
+#include "mir/mir_buffer_stream.h"
 
 #include <gmock/gmock.h>
 
@@ -33,8 +33,10 @@ namespace doubles
 struct MockMirBufferStream : public MirBufferStream
 {
     MOCK_METHOD2(release, MirWaitHandle*(MirBufferStreamCallback, void*));
-    
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     MOCK_CONST_METHOD0(get_parameters, MirWindowParameters());
+#pragma GCC diagnostic pop
     MOCK_METHOD0(get_current_buffer, std::shared_ptr<client::ClientBuffer>());
     MOCK_METHOD0(get_current_buffer_id, uint32_t());
     MOCK_METHOD0(egl_native_window, EGLNativeWindowType());
@@ -45,6 +47,7 @@ struct MockMirBufferStream : public MirBufferStream
     MOCK_METHOD1(set_swap_interval, MirWaitHandle*(int));
     MOCK_METHOD1(adopted_by, void(MirWindow*));
     MOCK_METHOD1(unadopted_by, void(MirWindow*));
+    MOCK_CONST_METHOD0(microseconds_till_vblank, std::chrono::microseconds());
     MOCK_METHOD0(platform_type, MirPlatformType(void));
     MOCK_METHOD0(get_current_buffer_package, MirNativeBuffer*(void));
     MOCK_METHOD0(get_create_wait_handle, MirWaitHandle*(void));

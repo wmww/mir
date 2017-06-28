@@ -60,8 +60,11 @@ mir::frontend::BufferStreamId mcl::ErrorStream::rpc_id() const
     return id;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 MirWindowParameters mcl::ErrorStream::get_parameters() const
 {
+#pragma GCC diagnostic pop
     BOOST_THROW_EXCEPTION(std::runtime_error(error));
 }
 std::shared_ptr<mcl::ClientBuffer> mcl::ErrorStream::get_current_buffer()
@@ -103,6 +106,12 @@ void mcl::ErrorStream::adopted_by(MirWindow*)
 void mcl::ErrorStream::unadopted_by(MirWindow*)
 {
 }
+
+std::chrono::microseconds mcl::ErrorStream::microseconds_till_vblank() const
+{
+    return std::chrono::microseconds::zero();
+}
+
 MirNativeBuffer* mcl::ErrorStream::get_current_buffer_package()
 {
     BOOST_THROW_EXCEPTION(std::runtime_error(error));

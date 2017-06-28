@@ -244,6 +244,21 @@ message DisplayOutput {
   optional uint32 gamma_supported = 23;
   optional bytes edid = 24;
   optional string model = 25;
+
+  // Until recently logical_width/height were read-only fields calculated
+  // by the server from the current mode and orientation. However they are
+  // now user-customizable, so we need to be able to tell the difference
+  // between logical dimensions calculated automatically (change dynamically)
+  // and those chosen by the user (may only change by user intervention).
+  optional uint32 logical_width = 26;
+  optional uint32 logical_height = 27;
+  optional bool custom_logical_size = 28;
+}
+
+message Extension
+{
+  optional string name = 1;
+  repeated sint32 version = 2;
 }
 
 message Connection {
@@ -255,6 +270,7 @@ message Connection {
   optional InputDevices input_devices = 6;
   optional string input_configuration = 7;
   optional bool coordinate_translation_present = 8; 
+  repeated Extension extension = 9;
 
   optional string error = 127;
   optional StructuredError structured_error = 128;
@@ -437,9 +453,17 @@ message Cookie {
   required bytes cookie = 1;
 }
 
-message RaiseRequest {
-  required Cookie cookie = 1;
+enum RequestOperation {
+  UNKNOWN = 0;
+  START_DRAG_AND_DROP = 1;
+  MAKE_ACTIVE = 2;
+  USER_MOVE = 3;
+}
+
+message RequestWithAuthority {
+  required Cookie authority = 1;
   required SurfaceId surface_id = 2;
+  required RequestOperation operation = 3;
 }
 
 message InputDevices {
@@ -471,4 +495,8 @@ message TouchpadConfiguration {
   optional uint32 middle_mouse_button_emulation = 5;
   optional uint32 disable_with_mouse = 6;
   optional uint32 disable_while_typing = 7;
+}
+
+message InputConfigurationRequest {
+  optional string input_configuration = 1;
 }

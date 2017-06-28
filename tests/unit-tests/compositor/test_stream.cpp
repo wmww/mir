@@ -19,7 +19,6 @@
 #include "mir/test/doubles/stub_buffer.h"
 #include "mir/test/doubles/stub_buffer_allocator.h"
 #include "mir/test/doubles/mock_event_sink.h"
-#include "mir/test/doubles/mock_frame_dropping_policy_factory.h"
 #include "mir/test/fake_shared.h"
 #include "src/server/compositor/stream.h"
 #include "mir/scene/null_surface_observer.h"
@@ -64,9 +63,9 @@ struct StubBufferMap : mf::ClientBuffers
     }
     void send_buffer(mg::BufferID id)
     {
-        sink.send_buffer(mf::BufferStreamId{33}, *operator[](id), mg::BufferIpcMsgType::update_msg);
+        sink.send_buffer(mf::BufferStreamId{33}, *get(id), mg::BufferIpcMsgType::update_msg);
     }
-    std::shared_ptr<mg::Buffer>& operator[](mg::BufferID id)
+    std::shared_ptr<mg::Buffer> get(mg::BufferID id) const
     {
         auto it = std::find_if(buffers.begin(), buffers.end(),
             [id](std::shared_ptr<mg::Buffer> const& b)
@@ -97,9 +96,7 @@ struct Stream : Test
     std::vector<std::shared_ptr<mg::Buffer>> buffers;
     NiceMock<mtd::MockEventSink> mock_sink;
     MirPixelFormat construction_format{mir_pixel_format_rgb_565};
-    mtd::MockFrameDroppingPolicyFactory framedrop_factory;
     mc::Stream stream{
-        framedrop_factory,
         std::make_unique<StubBufferMap>(mock_sink, buffers), initial_size, construction_format};
 };
 }
@@ -183,6 +180,23 @@ TEST_F(Stream, calls_observers_after_scheduling_on_submissions)
     stream.submit_buffer(buffers[0]);
 }
 
+TEST_F(Stream, wakes_compositor_before_starting_socket_io)
+{
+    auto observer = std::make_shared<MockSurfaceObserver>();
+
+    InSequence seq;
+    EXPECT_CALL(*observer, frame_posted(_,_)).Times(2);
+    EXPECT_CALL(mock_sink, send_buffer(_,_,_)).Times(1);
+
+    stream.add_observer(observer);
+    stream.allow_framedropping(true);
+    stream.submit_buffer(buffers[0]);
+    stream.submit_buffer(buffers[1]);
+    stream.remove_observer(observer);
+
+    Mock::VerifyAndClearExpectations(&mock_sink);
+}
+
 TEST_F(Stream, calls_observers_call_doesnt_hold_lock)
 {
     auto observer = std::make_shared<MockSurfaceObserver>();
@@ -247,116 +261,6 @@ TEST_F(Stream, reports_size)
 TEST_F(Stream, reports_format)
 {
     EXPECT_THAT(stream.pixel_format(), Eq(construction_format));
-}
-
-//confusingly, we have two framedrops. One is swapinterval zero, where old buffers are dropped as quickly as possible.
-//In non-framedropping mode, we drop based on a timeout according to a policy, mostly for screen-off scenarios.
-//
-namespace
-{
-struct MockPolicy : mc::FrameDroppingPolicy
-{
-    MOCK_METHOD0(swap_now_blocking, void(void));
-    MOCK_METHOD0(swap_unblocked, void(void));
-};
-}
-TEST_F(Stream, timer_starts_when_buffers_run_out_and_framedropping_disabled)
-{
-    auto policy = std::make_unique<MockPolicy>();
-    mtd::FrameDroppingPolicyFactoryMock policy_factory;
-    EXPECT_CALL(*policy, swap_now_blocking());
-    EXPECT_CALL(policy_factory, create_policy(_))
-        .WillOnce(InvokeWithoutArgs([&]{ return std::move(policy); }));
-    mc::Stream stream{
-        policy_factory,
-        std::make_unique<StubBufferMap>(mock_sink, buffers), initial_size, construction_format};
-    for (auto const& buffer : buffers)
-        stream.associate_buffer(buffer->id());
-
-    for (auto& buffer : buffers)
-        stream.submit_buffer(buffer);
-}
-
-TEST_F(Stream, timer_does_not_start_when_no_associated_buffers)
-{
-    auto policy = std::make_unique<MockPolicy>();
-    mtd::FrameDroppingPolicyFactoryMock policy_factory;
-    EXPECT_CALL(*policy, swap_now_blocking())
-        .Times(0);
-    EXPECT_CALL(policy_factory, create_policy(_))
-        .WillOnce(InvokeWithoutArgs([&]{ return std::move(policy); }));
-    mc::Stream stream{
-        policy_factory,
-        std::make_unique<StubBufferMap>(mock_sink, buffers), initial_size, construction_format};
-    for (auto& buffer : buffers)
-        stream.submit_buffer(buffer);
-}
-
-TEST_F(Stream, timer_stops_if_a_buffer_is_available)
-{
-    auto policy = std::make_unique<MockPolicy>();
-    mtd::FrameDroppingPolicyFactoryMock policy_factory;
-    EXPECT_CALL(*policy, swap_now_blocking());
-    EXPECT_CALL(*policy, swap_unblocked());
-    EXPECT_CALL(policy_factory, create_policy(_))
-        .WillOnce(InvokeWithoutArgs([&]{ return std::move(policy); }));
-    mc::Stream stream{
-        policy_factory,
-        std::make_unique<StubBufferMap>(mock_sink, buffers), initial_size, construction_format};
-    for (auto const& buffer : buffers)
-        stream.associate_buffer(buffer->id());
-    for (auto& buffer : buffers)
-        stream.submit_buffer(buffer);
-    stream.lock_compositor_buffer(this);
-}
-
-TEST_F(Stream, triggering_policy_gives_a_buffer_back)
-{
-    for (auto& buffer : buffers)
-        stream.submit_buffer(buffer);
-    stream.lock_compositor_buffer(this);
-
-    Mock::VerifyAndClearExpectations(&mock_sink);
-    EXPECT_CALL(mock_sink, send_buffer(_,_,_));
-    framedrop_factory.trigger_policies();
-    Mock::VerifyAndClearExpectations(&mock_sink);
-}
-
-TEST_F(Stream, doesnt_drop_the_only_frame_when_arbiter_has_none)
-{
-    stream.submit_buffer(buffers[0]);
-    Mock::VerifyAndClearExpectations(&mock_sink);
-    EXPECT_CALL(mock_sink, send_buffer(_,_,_))
-        .Times(0);
-    framedrop_factory.trigger_policies();
-    Mock::VerifyAndClearExpectations(&mock_sink);
-}
-
-TEST_F(Stream, doesnt_drop_the_latest_frame_with_a_longer_queue)
-{
-    stream.submit_buffer(buffers[0]);
-    stream.lock_compositor_buffer(this);
-    stream.submit_buffer(buffers[1]);
-    stream.submit_buffer(buffers[2]);
-
-    Mock::VerifyAndClearExpectations(&mock_sink);
-    EXPECT_CALL(mock_sink, send_buffer(_,Ref(*buffers[1]),_))
-        .Times(1);
-    framedrop_factory.trigger_policies();
-    Mock::VerifyAndClearExpectations(&mock_sink);
-}
-
-TEST_F(Stream, doesnt_drop_the_latest_frame_with_a_2_buffer_queue)
-{
-    stream.submit_buffer(buffers[0]);
-    stream.lock_compositor_buffer(this);
-    stream.submit_buffer(buffers[1]);
-
-    Mock::VerifyAndClearExpectations(&mock_sink);
-    EXPECT_CALL(mock_sink, send_buffer(_,Ref(*buffers[1]),_))
-        .Times(0);
-    framedrop_factory.trigger_policies();
-    Mock::VerifyAndClearExpectations(&mock_sink);
 }
 
 TEST_F(Stream, returns_buffers_to_client_when_told_to_bring_queue_up_to_date)

@@ -19,8 +19,8 @@
 #include "src/client/mir_screencast.h"
 #include "src/client/rpc/mir_display_server.h"
 
-#include "mir/client_buffer_factory.h"
-#include "mir/client_platform.h"
+#include "mir/client/client_buffer_factory.h"
+#include "mir/client/client_platform.h"
 
 #include "mir/test/doubles/mock_mir_buffer_stream.h"
 #include "mir/test/doubles/null_client_buffer.h"
@@ -71,7 +71,7 @@ public:
         if (server_thread.joinable())
             server_thread.join();
         server_thread = std::thread{
-            [response, done, this]
+            [response, done]
             {
                 response->clear_error();
                 done->Run();
@@ -85,7 +85,7 @@ public:
     {
         if (server_thread.joinable())
             server_thread.join();
-        server_thread = std::thread{[done, this] { done->Run(); }};
+        server_thread = std::thread{[done] { done->Run(); }};
     }
 
     ~StubProtobufServer()

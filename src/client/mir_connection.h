@@ -24,12 +24,13 @@
 #include "rpc/mir_display_server.h"
 #include "rpc/mir_display_server_debug.h"
 
+#include "mir/extension_description.h"
 #include "mir_toolkit/extensions/window_coordinate_translation.h"
 #include "mir_toolkit/extensions/graphics_module.h"
 #include "mir/geometry/size.h"
-#include "mir/client_platform.h"
+#include "mir/client/client_platform.h"
 #include "mir/frontend/surface_id.h"
-#include "mir/client_context.h"
+#include "mir/client/client_context.h"
 #include "mir_toolkit/mir_client_library.h"
 #include "mir_surface.h"
 #include "display_configuration.h"
@@ -74,14 +75,6 @@ namespace rpc
 class DisplayServer;
 class DisplayServerDebug;
 class MirBasicRpcChannel;
-}
-}
-
-namespace input
-{
-namespace receiver
-{
-class InputPlatform;
 }
 }
 
@@ -188,6 +181,8 @@ public:
     void remove_session_display();
 
     MirWaitHandle* set_base_display_configuration(MirDisplayConfiguration const* configuration);
+    void apply_input_configuration(MirInputConfig  const* config);
+    void set_base_input_configuration(MirInputConfig const* config);
     void preview_base_display_configuration(
         mir::protobuf::DisplayConfiguration const& configuration,
         std::chrono::seconds timeout);
@@ -230,6 +225,10 @@ public:
         void* render_surface);
 
     void* request_interface(char const* name, int version);
+
+    void enumerate_extensions(
+        void* context,
+        void (*enumerator)(void* context, char const* extension, int version));
 
 private:
     //google cant have callbacks with more than 2 args
@@ -340,8 +339,6 @@ private:
     std::shared_ptr<mir::client::ClientBufferFactory> client_buffer_factory;
     std::shared_ptr<EGLNativeDisplayType> native_display;
 
-    std::shared_ptr<mir::input::receiver::InputPlatform> const input_platform;
-
     std::string error_message;
 
     MirWaitHandle connect_wait_handle;
@@ -385,6 +382,8 @@ private:
     int const nbuffers;
     mir::optional_value<MirExtensionWindowCoordinateTranslationV1> translation_ext;
     mir::optional_value<MirExtensionGraphicsModuleV1> graphics_module_extension;
+
+    std::vector<mir::ExtensionDescription> extensions;
 };
 
 #endif /* MIR_CLIENT_MIR_CONNECTION_H_ */

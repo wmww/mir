@@ -171,18 +171,72 @@ mir_create_input_method_window_spec(MirConnection* connection,
                                     int width, int height);
 
 /**
+ * Create a window specification for a gloss window.
+ *
+ * \param [in] connection   Connection the window will be created on
+ * \param [in] width        Requested width. The server is not guaranteed to return a window of this width.
+ * \param [in] height       Requested height. The server is not guaranteed to return a window of this height.
+ * \return                  A handle that can be passed to mir_create_window() to complete construction.
+ */
+MirWindowSpec*
+mir_create_gloss_window_spec(MirConnection* connection, int width, int height);
+
+/**
+ * Create a window specification for a satellite window.
+ *
+ * \param [in] connection   Connection the window will be created on
+ * \param [in] width        Requested width. The server is not guaranteed to return a window of this width.
+ * \param [in] height       Requested height. The server is not guaranteed to return a window of this height.
+ * \param [in] parent       A valid parent window.
+ * \return                  A handle that can be passed to mir_create_window() to complete construction.
+ */
+MirWindowSpec*
+mir_create_satellite_window_spec(MirConnection* connection, int width, int height, MirWindow* parent);
+
+/**
+ * Create a window specification for a utility window.
+ *
+ * \param [in] connection   Connection the window will be created on
+ * \param [in] width        Requested width. The server is not guaranteed to return a window of this width.
+ * \param [in] height       Requested height. The server is not guaranteed to return a window of this height.
+ * \return                  A handle that can be passed to mir_create_window() to complete construction.
+ */
+MirWindowSpec*
+mir_create_utility_window_spec(MirConnection* connection, int width, int height);
+
+/**
+ * Create a window specification for a freestyle window.
+ *
+ * \param [in] connection   Connection the window will be created on
+ * \param [in] width        Requested width. The server is not guaranteed to return a window of this width.
+ * \param [in] height       Requested height. The server is not guaranteed to return a window of this height.
+ * \return                  A handle that can be passed to mir_create_window() to complete construction.
+ */
+MirWindowSpec*
+mir_create_freestyle_window_spec(MirConnection* connection, int width, int height);
+
+/**
  * Create a window specification.
  * This can be used with mir_create_window() to create a window or with
  * mir_window_apply_spec() to change an existing window.
- * \remark For use with mir_create_window() at least the type, width, height,
- * format and buffer_usage must be set. (And for types requiring a parent that
- * too must be set.)
+ * \remark For use with mir_create_window() at least the type, width and height
+ * must be set. (And for types requiring a parent that too must be set.)
  *
  * \param [in] connection   a valid mir connection
  * \return                  A handle that can ultimately be passed to
  *                          mir_create_window() or mir_window_apply_spec()
  */
 MirWindowSpec* mir_create_window_spec(MirConnection* connection);
+
+/**
+ * Retrieve the connection.
+ * \remark this is the same connection as used to create the Window and does
+ * not need an additional mir_connection_release().
+ *
+ * \param [in] window       a valid MirWindow
+ * \return                  the connection
+ */
+MirConnection* mir_window_get_connection(MirWindow* window);
 
 /**
  * Set the requested parent.
@@ -485,9 +539,12 @@ void mir_window_spec_set_placement(MirWindowSpec*      spec,
 void mir_window_spec_set_cursor_name(MirWindowSpec* spec, char const* name);
 
 /**
- * \note To be deprecated soon. Only for enabling other deprecations.
  *
  * Set the requested pixel format.
+ * \deprecated There will be no default stream associated with a window anymore. Instead create a
+ *             MirRenderSurface and either set the pixel format through EGL (for EGL based rendering) or
+ *             by allocating a cpu accessible buffer through mir_connection_allocate_buffer or
+ *             mir_render_surface_get_buffer_stream
  * \param [in] spec     Specification to mutate
  * \param [in] format   Requested pixel format
  *
@@ -495,12 +552,14 @@ void mir_window_spec_set_cursor_name(MirWindowSpec* spec, char const* name);
  *          If the server is unable to create a window with this pixel format at
  *          the point mir_create_window() is called it will instead return an invalid window.
  */
-void mir_window_spec_set_pixel_format(MirWindowSpec* spec, MirPixelFormat format);
+void mir_window_spec_set_pixel_format(MirWindowSpec* spec, MirPixelFormat format)
+MIR_FOR_REMOVAL_IN_VERSION_1("Use mir_connection_allocate_buffer/mir_render_surface_get_buffer_stream instead");
 
 /**
  * \note To be deprecated soon. Only for enabling other deprecations.
  *
  * Set the requested buffer usage.
+ * \deprecated There will be no default stream associated with a window anymore. MirBufferUsage is no longer applicable.
  * \param [in] spec     Specification to mutate
  * \param [in] usage    Requested buffer usage
  *
@@ -508,10 +567,12 @@ void mir_window_spec_set_pixel_format(MirWindowSpec* spec, MirPixelFormat format
  *          If the server is unable to create a window with this buffer usage at
  *          the point mir_create_window() is called it will instead return an invalid window.
  */
-void mir_window_spec_set_buffer_usage(MirWindowSpec* spec, MirBufferUsage usage);
-
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+void mir_window_spec_set_buffer_usage(MirWindowSpec* spec, MirBufferUsage usage)
+MIR_FOR_REMOVAL_IN_VERSION_1("No longer applicable, use mir_render_surface apis");
+#pragma GCC diagnostic pop
 /**
- * \note To be deprecated soon. Waiting for mir_window_spec_set_render_surfaces() to land.
  *
  * Set the streams associated with the spec.
  * streams[0] is the bottom-most stream, and streams[size-1] is the topmost.
@@ -521,6 +582,7 @@ void mir_window_spec_set_buffer_usage(MirWindowSpec* spec, MirBufferUsage usage)
  * but is in the list will be associated with the window.
  * Streams set a displacement from the top-left corner of the window.
  *
+ * \deprecated Use mir_window_spec_add_render_surface
  * \warning disassociating streams from the window will not release() them.
  * \warning It is wiser to arrange the streams within the bounds of the
  *          window the spec is applied to. Shells can define their own
@@ -532,32 +594,8 @@ void mir_window_spec_set_buffer_usage(MirWindowSpec* spec, MirBufferUsage usage)
  */
 void mir_window_spec_set_streams(MirWindowSpec* spec,
                                  MirBufferStreamInfo* streams,
-                                 unsigned int num_streams);
-
-/**
- * Set the MirWindowSpec to display content contained in a render surface
- *
- * \warning: The initial call to mir_window_spec_add_render_surface will set
- *           the bottom-most content, and subsequent calls will stack the
- *           content on top.
- *
- * \param spec             The window_spec to be updated
- * \param render_surface   The render surface containing the content to be displayed
- * \param logical_width    The width that the content will be displayed at
- *                         (Ignored for buffer streams)
- * \param logical_height   The height that the content will be displayed at
- *                         (Ignored for buffer streams)
- * \param displacement_x   The x displacement from the top-left corner of the MirWindow
- * \param displacement_y   The y displacement from the top-left corner of the MirWindow
- */
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-void mir_window_spec_add_render_surface(MirWindowSpec* spec,
-                                        MirRenderSurface* render_surface,
-                                        int logical_width, int logical_height,
-                                        int displacement_x, int displacement_y)
-MIR_FOR_REMOVAL_IN_VERSION_1("This function is slated for rename due to MirRenderSurface-->MirSurface transition");
-#pragma GCC diagnostic pop
+                                 unsigned int num_streams)
+MIR_FOR_REMOVAL_IN_VERSION_1("Use mir_window_spec_add_render_surface instead");
 
 /**
  * Release the resources held by a MirWindowSpec.
@@ -647,7 +685,7 @@ void mir_window_set_event_handler(MirWindow* window,
  * Retrieve the primary MirBufferStream associated with a window (to advance buffers,
  * obtain EGLNativeWindow, etc...)
  *
- *   \deprecated Users should use mir_window_spec_set_streams() to arrange
+ *   \deprecated Users should use mir_window_spec_add_render_surface() to arrange
  *               the content of a window, instead of relying on a stream
  *               being created by default.
  *   \warning If the window was created with, or modified to have a
@@ -656,8 +694,8 @@ void mir_window_set_event_handler(MirWindow* window,
  *            be removed, and this function will return NULL.
  *   \param[in] window The window
  */
-MirBufferStream* mir_window_get_buffer_stream(MirWindow* window);
-
+MirBufferStream* mir_window_get_buffer_stream(MirWindow* window)
+MIR_FOR_REMOVAL_IN_VERSION_1("Use mir_window_spec_add_render_surface during window creation/modification instead");
 /**
  * Retrieve a text description of the error. The returned string is owned by
  * the library and remains valid until the window or the associated
@@ -671,11 +709,17 @@ char const* mir_window_get_error_message(MirWindow* window);
 
 /**
  * Get a window's parameters.
- *   \pre                     The window is valid
- *   \param [in]  window      The window
- *   \param [out] parameters  Structure to be populated
+ *  \deprecated Use mir_window getters or listen for state change events instead
+ *  \pre                     The window is valid
+ *  \param [in]  window      The window
+ *  \param [out] parameters  Structure to be populated
  */
-void mir_window_get_parameters(MirWindow* window, MirWindowParameters* parameters);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+void mir_window_get_parameters(MirWindow* window, MirWindowParameters* parameters)
+MIR_FOR_REMOVAL_IN_VERSION_1("Use mir_window_get_xxx apis or listen to state/attribute change events instead");
+#pragma GCC diagnostic pop
+
 
 /**
  * Get the orientation of a window.
@@ -692,6 +736,15 @@ MirOrientation mir_window_get_orientation(MirWindow* window);
  *                     An invalid cookie will terminate the client connection.
  */
 void mir_window_raise(MirWindow* window, MirCookie const* cookie);
+
+/**
+ * Informs the window manager that the user is moving the window.
+ *
+ * \param [in] window  The window to move
+ * \param [in] cookie  A cookie instance obtained from an input event.
+ *                     An invalid cookie will terminate the client connection.
+ */
+void mir_window_request_user_move(MirWindow* window, MirCookie const* cookie);
 
 /**
  * Get the type (purpose) of a window.
@@ -739,13 +792,17 @@ int mir_window_get_dpi(MirWindow* window);
 /**
  * Choose the cursor state for a window: whether a cursor is shown,
  * and which cursor if so.
+ *    \deprecated Users should use mir_window_spec_set_cursor_name/mir_window_spec_set_cursor_render_surface
  *    \param [in] window     The window to operate on
  *    \param [in] parameters The configuration parameters obtained
  *                           from mir_cursor* family of functions.
  *
  */
-void mir_window_configure_cursor(MirWindow* window, MirCursorConfiguration const* parameters);
-
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+void mir_window_configure_cursor(MirWindow* window, MirCursorConfiguration const* parameters)
+MIR_FOR_REMOVAL_IN_VERSION_1("Use mir_window_spec_set_cursor_name/mir_window_spec_set_cursor_render_surface instead");
+#pragma GCC diagnostic pop
 /**
  * Request to set the preferred orientations of a window.
  * The request may be rejected by the server; to check wait on the

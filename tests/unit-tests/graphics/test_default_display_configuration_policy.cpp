@@ -47,7 +47,8 @@ public:
 
 DisplayConfigurationOutput default_output(DisplayConfigurationOutputId id)
 {
-    return { id, DisplayConfigurationCardId{1},
+    // We name the return value just to work around an apparent clang bug/quirk
+    DisplayConfigurationOutput ret{ id, DisplayConfigurationCardId{1},
         DisplayConfigurationOutputType::vga,
         {mir_pixel_format_abgr_8888},
         { {Size{523, 555}, 60.0} },
@@ -65,8 +66,10 @@ DisplayConfigurationOutput default_output(DisplayConfigurationOutputId id)
         mir_subpixel_arrangement_unknown,
         {},
         mir_output_gamma_unsupported,
+        {},
         {}
     };
+    return ret;
 }
 
 DisplayConfigurationOutput connected_with_modes()
@@ -142,7 +145,7 @@ TEST(CloneDisplayConfigurationPolicyTest, uses_all_connected_valid_outputs)
 
     policy.apply_to(conf);
 
-    conf.for_each_output([&conf](DisplayConfigurationOutput const& output)
+    conf.for_each_output([](DisplayConfigurationOutput const& output)
     {
         if (output.connected && output.modes.size() > 0)
         {
@@ -179,7 +182,7 @@ TEST(CloneDisplayConfigurationPolicyTest, default_orientation_is_normal)
     CloneDisplayConfigurationPolicy policy;
     StubDisplayConfiguration conf{create_default_configuration()};
 
-    conf.for_each_output([&conf](DisplayConfigurationOutput const& output)
+    conf.for_each_output([](DisplayConfigurationOutput const& output)
     {
         EXPECT_EQ(mir_orientation_normal, output.orientation);
     });
@@ -241,7 +244,7 @@ TEST(SingleDisplayConfigurationPolicyTest, uses_first_of_connected_valid_outputs
 
     bool is_first{true};
 
-    conf.for_each_output([&conf, &is_first](DisplayConfigurationOutput const& output)
+    conf.for_each_output([&is_first](DisplayConfigurationOutput const& output)
     {
         if (output.connected && output.modes.size() > 0 && is_first)
         {
@@ -286,7 +289,7 @@ TEST(SingleDisplayConfigurationPolicyTest, default_orientation_is_normal)
     auto conf = create_default_configuration();
     //StubDisplayConfiguration conf{create_default_configuration()};
 
-    conf.for_each_output([&conf](DisplayConfigurationOutput const& output)
+    conf.for_each_output([](DisplayConfigurationOutput const& output)
     {
         EXPECT_EQ(mir_orientation_normal, output.orientation);
     });
@@ -345,7 +348,7 @@ TEST(SideBySideDisplayConfigurationPolicyTest, default_orientation_is_normal)
     SideBySideDisplayConfigurationPolicy policy;
     StubDisplayConfiguration conf{create_default_configuration()};
 
-    conf.for_each_output([&conf](DisplayConfigurationOutput const& output)
+    conf.for_each_output([](DisplayConfigurationOutput const& output)
     {
         EXPECT_EQ(mir_orientation_normal, output.orientation);
     });

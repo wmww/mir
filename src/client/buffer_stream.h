@@ -20,8 +20,8 @@
 #define MIR_CLIENT_BUFFER_STREAM_H
 
 #include "mir_wait_handle.h"
-#include "mir/egl_native_surface.h"
-#include "mir/client_buffer.h"
+#include "mir/client/egl_native_surface.h"
+#include "mir/client/client_buffer.h"
 #include "mir/mir_buffer_stream.h"
 #include "mir/geometry/size.h"
 #include "mir/optional_value.h"
@@ -110,7 +110,10 @@ public:
     std::shared_ptr<MemoryRegion> secure_for_cpu_write() override;
 
     // mcl::EGLNativeSurface interface
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     MirWindowParameters get_parameters() const override;
+#pragma GCC diagnostic pop
     void swap_buffers_sync() override;
 
     void request_and_wait_for_configure(MirWindowAttrib attrib, int) override;
@@ -134,6 +137,8 @@ public:
     MirRenderSurface* render_surface() const override;
 #pragma GCC diagnostic pop
 
+    std::chrono::microseconds microseconds_till_vblank() const override;
+
 protected:
     BufferStream(BufferStream const&) = delete;
     BufferStream& operator=(BufferStream const&) = delete;
@@ -141,10 +146,7 @@ protected:
 private:
     void process_buffer(protobuf::Buffer const& buffer);
     void process_buffer(protobuf::Buffer const& buffer, std::unique_lock<std::mutex>&);
-    void on_scale_set(float scale);
-    void release_cpu_region();
     MirWaitHandle* set_server_swap_interval(int i);
-    void init_swap_interval();
     void wait_for_vsync();
 
     mutable std::mutex mutex; // Protects all members of *this
@@ -181,6 +183,7 @@ private:
     std::unordered_set<MirWindow*> users;
     std::shared_ptr<FrameClock> frame_clock;
     mir::time::PosixTimestamp last_vsync;
+    mutable mir::time::PosixTimestamp next_vsync;
 };
 
 }

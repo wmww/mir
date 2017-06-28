@@ -39,6 +39,8 @@ namespace mcl = mir::client;
 
 namespace
 {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 MirWaitHandle* mir_configure_cursor_helper(MirWindow* window, MirCursorConfiguration const* cursor)
 {
     MirWaitHandle *result = nullptr;
@@ -56,6 +58,7 @@ MirWaitHandle* mir_configure_cursor_helper(MirWindow* window, MirCursorConfigura
     return result;
 }
 }
+#pragma GCC diagnostic pop
 
 MirWindowSpec*
 mir_create_normal_window_spec(MirConnection* connection,
@@ -132,6 +135,41 @@ mir_create_input_method_window_spec(MirConnection* connection,
     return spec;
 }
 
+MirWindowSpec*
+mir_create_gloss_window_spec(MirConnection* connection, int width, int height)
+{
+    auto spec = new MirWindowSpec{connection, width, height, mir_pixel_format_invalid};
+    spec->type = mir_window_type_gloss;
+    return spec;
+}
+
+MirWindowSpec*
+mir_create_satellite_window_spec(MirConnection* connection, int width, int height, MirWindow* parent)
+{
+    mir::require(mir_window_is_valid(parent));
+
+    auto spec = new MirWindowSpec{connection, width, height, mir_pixel_format_invalid};
+    spec->type = mir_window_type_satellite;
+    spec->parent = parent;
+
+    return spec;
+}
+
+MirWindowSpec*
+mir_create_utility_window_spec(MirConnection* connection, int width, int height)
+{
+    auto spec = new MirWindowSpec{connection, width, height, mir_pixel_format_invalid};
+    spec->type = mir_window_type_utility;
+    return spec;
+}
+
+MirWindowSpec*
+mir_create_freestyle_window_spec(MirConnection* connection, int width, int height){
+    auto spec = new MirWindowSpec{connection, width, height, mir_pixel_format_invalid};
+    spec->type = mir_window_type_freestyle;
+    return spec;
+}
+
 MirWindowSpec* mir_create_window_spec(MirConnection* connection)
 try
 {
@@ -139,6 +177,19 @@ try
     auto const spec = new MirWindowSpec{};
     spec->connection = connection;
     return spec;
+}
+catch (std::exception const& ex)
+{
+    MIR_LOG_UNCAUGHT_EXCEPTION(ex);
+    std::abort();  // If we just failed to allocate a MirWindowSpec returning isn't safe
+}
+
+MirConnection* mir_window_get_connection(MirWindow* window)
+try
+{
+    mir::require(mir_window_is_valid(window));
+
+    return window->connection();
 }
 catch (std::exception const& ex)
 {
@@ -418,7 +469,6 @@ catch (std::exception const& ex)
     MIR_LOG_UNCAUGHT_EXCEPTION(ex);
 }
 
-extern "C" __attribute__((alias("mir_window_spec_set_cursor_name"))) void mir_surface_spec_set_cursor_name();
 void mir_window_spec_set_cursor_name(MirWindowSpec* spec, char const* name)
 try
 {
@@ -441,6 +491,8 @@ catch (std::exception const& ex)
     MIR_LOG_UNCAUGHT_EXCEPTION(ex);
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 void mir_window_spec_set_buffer_usage(MirWindowSpec* spec, MirBufferUsage usage)
 try
 {
@@ -451,6 +503,7 @@ catch (std::exception const& ex)
 {
     MIR_LOG_UNCAUGHT_EXCEPTION(ex);
 }
+#pragma GCC diagnostic pop
 
 void mir_window_spec_set_streams(MirWindowSpec* spec, MirBufferStreamInfo* streams, unsigned int size)
 try
@@ -637,10 +690,13 @@ char const* mir_window_get_error_message(MirWindow* window)
     return window->get_error_message();
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 void mir_window_get_parameters(MirWindow* window, MirWindowParameters* parameters)
 {
     *parameters = window->get_parameters();
 }
+#pragma GCC diagnostic pop
 
 MirOrientation mir_window_get_orientation(MirWindow* window)
 {
@@ -654,6 +710,20 @@ void mir_window_raise(MirWindow* window, MirCookie const* cookie)
     try
     {
         window->raise_surface(cookie);
+    }
+    catch (std::exception const& ex)
+    {
+        MIR_LOG_UNCAUGHT_EXCEPTION(ex);
+    }
+}
+
+void mir_window_request_user_move(MirWindow* window, MirCookie const* cookie)
+{
+    mir::require(mir_window_is_valid(window));
+
+    try
+    {
+        window->request_user_move(cookie);
     }
     catch (std::exception const& ex)
     {
@@ -773,10 +843,13 @@ int mir_window_get_dpi(MirWindow* window)
     return dpi;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 void mir_window_configure_cursor(MirWindow* window, MirCursorConfiguration const* cursor)
 {
     mir_configure_cursor_helper(window, cursor);
 }
+#pragma GCC diagnostic pop
 
 void mir_window_set_preferred_orientation(MirWindow* window, MirOrientationMode mode)
 try

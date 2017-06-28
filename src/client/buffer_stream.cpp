@@ -33,7 +33,7 @@
 #include "connection_surface_map.h"
 
 #include "mir/log.h"
-#include "mir/client_platform.h"
+#include "mir/client/client_platform.h"
 #include "mir/frontend/client_constants.h"
 #include "mir_toolkit/mir_native_buffer.h"
 
@@ -65,7 +65,8 @@ public:
         platform(platform)
     {
     }
-
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     void allocate_buffer(geom::Size size, MirPixelFormat format, int usage) override
     {
         mp::BufferAllocation request;
@@ -88,7 +89,7 @@ public:
         server.allocate_buffers(&request, protobuf_void.get(),
             google::protobuf::NewCallback(Requests::ignore_response, protobuf_void));
     }
-
+#pragma GCC diagnostic pop
     void free_buffer(int buffer_id) override
     {
         mp::BufferRelease request;
@@ -184,7 +185,7 @@ struct BufferDepository
         return current->rpc_id();
     }
 
-    MirWaitHandle* submit(std::function<void()> const& done, MirPixelFormat, int)
+    MirWaitHandle* submit(std::function<void()> const& done)
     {
         std::unique_lock<std::mutex> lk(mutex);
         if (!current)
@@ -388,11 +389,8 @@ MirWaitHandle* mcl::BufferStream::swap_buffers(std::function<void()> const& done
 
     secured_region.reset();
 
-    // TODO: We can fix the strange "ID casting" used below in the second phase
-    // of buffer stream which generalizes and clarifies the server side logic.
     lock.unlock();
-    return buffer_depository->submit(done,
-        static_cast<MirPixelFormat>(protobuf_bs->pixel_format()), protobuf_bs->id().value());
+    return buffer_depository->submit(done);
 }
 
 std::shared_ptr<mcl::ClientBuffer> mcl::BufferStream::get_current_buffer()
@@ -408,12 +406,6 @@ EGLNativeWindowType mcl::BufferStream::egl_native_window()
     return static_cast<EGLNativeWindowType>(egl_native_window_.get());
 }
 
-void mcl::BufferStream::release_cpu_region()
-{
-    std::unique_lock<decltype(mutex)> lock(mutex);
-    secured_region.reset();
-}
-
 std::shared_ptr<mcl::MemoryRegion> mcl::BufferStream::secure_for_cpu_write()
 {
     auto buffer = get_current_buffer();
@@ -424,6 +416,8 @@ std::shared_ptr<mcl::MemoryRegion> mcl::BufferStream::secure_for_cpu_write()
     return secured_region;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 /* mcl::EGLNativeSurface interface for EGLNativeWindow integration */
 MirWindowParameters mcl::BufferStream::get_parameters() const
 {
@@ -436,6 +430,37 @@ MirWindowParameters mcl::BufferStream::get_parameters() const
         static_cast<MirPixelFormat>(protobuf_bs->pixel_format()),
         static_cast<MirBufferUsage>(protobuf_bs->buffer_usage()),
         mir_display_output_id_invalid};
+}
+#pragma GCC diagnostic pop
+
+std::chrono::microseconds mcl::BufferStream::microseconds_till_vblank() const
+{
+    std::chrono::microseconds ret(0);
+    mir::time::PosixTimestamp last;
+    std::shared_ptr<FrameClock> clock;
+
+    {
+        std::lock_guard<decltype(mutex)> lock(mutex);
+        last = last_vsync;
+        clock = frame_clock;
+    }
+
+    if (clock)
+    {
+        // We are unlocked because in future this call might ping the server:
+        mir::time::PosixTimestamp const target = clock->next_frame_after(last);
+        auto const now = mir::time::PosixTimestamp::now(target.clock_id);
+        if (target > now)
+        {
+            ret = std::chrono::duration_cast<std::chrono::microseconds>(
+                  target - now);
+        }
+
+        std::lock_guard<decltype(mutex)> lock(mutex);
+        next_vsync = target;
+    }
+
+    return ret;
 }
 
 void mcl::BufferStream::wait_for_vsync()
@@ -505,6 +530,9 @@ void mcl::BufferStream::swap_buffers_sync()
     int interval = swap_interval();
     for (int i = 0; i < interval; ++i)
         wait_for_vsync();
+
+    if (!interval)  // wait_for_vsync wasn't called to update last_vsync
+        last_vsync = next_vsync;
 }
 
 void mcl::BufferStream::request_and_wait_for_configure(MirWindowAttrib attrib, int interval)

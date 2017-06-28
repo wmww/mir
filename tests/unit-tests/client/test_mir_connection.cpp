@@ -25,9 +25,9 @@
 #include "src/client/connection_surface_map.h"
 #include "src/client/presentation_chain.h"
 
-#include "mir/client_platform.h"
-#include "mir/client_platform_factory.h"
-#include "mir/client_buffer_factory.h"
+#include "mir/client/client_platform.h"
+#include "mir/client/client_platform_factory.h"
+#include "mir/client/client_buffer_factory.h"
 #include "mir/raii.h"
 #include "mir/dispatch/dispatchable.h"
 #include "mir/events/event_builders.h"
@@ -85,6 +85,8 @@ struct MockAsyncBufferFactory : mcl::AsyncBufferFactory
 {
     MOCK_METHOD1(cancel_requests_with_context, void(void*));
     MOCK_METHOD1(generate_buffer, std::unique_ptr<mcl::MirBuffer>(mp::Buffer const&));
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     MOCK_METHOD7(expect_buffer, void(
         std::shared_ptr<mcl::ClientBufferFactory> const& native_buffer_factory,
         MirConnection* connection,
@@ -93,6 +95,7 @@ struct MockAsyncBufferFactory : mcl::AsyncBufferFactory
         MirBufferUsage usage,
         MirBufferCallback cb,
         void* cb_context));
+#pragma GCC diagnostic pop
     MOCK_METHOD7(expect_buffer, void(
         std::shared_ptr<mcl::ClientBufferFactory> const& native_buffer_factory,
         MirConnection* connection,
@@ -216,7 +219,10 @@ struct MockClientPlatform : public mcl::ClientPlatform
     MOCK_CONST_METHOD2(get_egl_pixel_format, MirPixelFormat(EGLDisplay, EGLConfig));
     MOCK_METHOD2(request_interface, void*(char const*, int));
     MOCK_CONST_METHOD1(native_format_for, uint32_t(MirPixelFormat));
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     MOCK_CONST_METHOD2(native_flags_for, uint32_t(MirBufferUsage, mir::geometry::Size));
+#pragma GCC diagnostic pop
     mcl::ClientContext* client_context = nullptr;
 };
 
@@ -848,7 +854,6 @@ TEST_F(MirConnectionTest, can_alloc_buffer_from_connection)
     auto format = mir_pixel_format_abgr_8888;
     auto usage = mir_buffer_usage_software;
     mp::BufferAllocation mp_alloc;
-    mp_alloc.mutable_id()->set_value(-1);
     auto params = mp_alloc.add_buffer_requests();
     params->set_width(size.width.as_int());
     params->set_height(size.height.as_int());

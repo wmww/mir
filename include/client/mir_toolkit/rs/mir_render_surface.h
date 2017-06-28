@@ -116,11 +116,12 @@ MIR_DEPRECATE_RENDERSURFACES_FOR_RENAME;
 bool mir_render_surface_is_valid(
     MirRenderSurface* render_surface)
 MIR_DEPRECATE_RENDERSURFACES_FOR_RENAME;
+
 /**
  * Retrieve a text description of the error. The returned string is owned by
  * the library and remains valid until the render surface or the associated
  * connection has been released.
- *   \param [in] redner_surface  The render surface
+ *   \param [in] render_surface  The render surface
  *   \return              A text description of any error resulting in an
  *                        invalid render surface, or the empty string "" if the
  *                        object is valid.
@@ -204,6 +205,22 @@ void mir_window_spec_set_cursor_render_surface(
     MirRenderSurface* render_surface,
     int hotspot_x, int hotspot_y)
 MIR_DEPRECATE_RENDERSURFACES_FOR_RENAME;
+
+/**
+ * Returns a new cursor configuration tied to a given render surface.
+ * If the configuration is successfully applied buffers from the surface
+ * will be used to fill the system cursor.
+ *    \param [in] surface      The render surface
+ *    \param [in] hotspot_x The x-coordinate to use as the cursor's hotspot.
+ *    \param [in] hotspot_y The y-coordinate to use as the cursor's hotspot.
+ *    \return A cursor parameters object which must be passed
+ *            to_mir_cursor_configuration_destroy
+ */
+MirCursorConfiguration* mir_cursor_configuration_from_render_surface(
+    MirRenderSurface* surface,
+    int hotspot_x, int hotspot_y)
+MIR_DEPRECATE_RENDERSURFACES_FOR_RENAME;
+
 
 /**
  * Set the MirWindowSpec to display content contained in a render surface

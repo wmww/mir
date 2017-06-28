@@ -50,7 +50,7 @@ class SnapshotStrategy;
 class BufferStreamFactory;
 class SurfaceFactory;
 
-class ApplicationSession : public Session, public frontend::SessionExtensions
+class ApplicationSession : public Session
 {
 public:
     ApplicationSession(
@@ -80,8 +80,6 @@ public:
 
     std::string name() const override;
     pid_t process_id() const override;
-
-    void drop_outstanding_requests() override;
 
     void hide() override;
     void show() override;

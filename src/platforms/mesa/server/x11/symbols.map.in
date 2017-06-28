@@ -5,6 +5,8 @@
    create_host_platform;
    create_guest_platform;
    describe_graphics_module;
+   create_rendering_platform;
+   create_display_platform;
   local: *;
 };
 
@@ -14,5 +16,4 @@
    create_input_platform;
    probe_input_platform;
    describe_input_module;
-  local: *;
 };

@@ -16,12 +16,12 @@
  * Authored by: Kevin DuBois <kevin.dubois@canonical.com>
  */
 
-#include "mir/client_buffer_factory.h"
-#include "mir/client_buffer.h"
+#include "mir/client/client_buffer_factory.h"
+#include "mir/client/client_buffer.h"
+#include "mir/client/surface_map.h"
 #include "buffer_vault.h"
 #include "buffer.h"
 #include "buffer_factory.h"
-#include "surface_map.h"
 #include "mir_protobuf.pb.h"
 #include "protobuf_to_native_buffer.h"
 #include "connection_surface_map.h"
@@ -99,8 +99,11 @@ mcl::BufferVault::~BufferVault()
 
 void mcl::BufferVault::alloc_buffer(geom::Size size, MirPixelFormat format, int usage)
 {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     buffer_factory->expect_buffer(platform_factory, nullptr, size, format, static_cast<MirBufferUsage>(usage),
         incoming_buffer, this);
+#pragma GCC diagnostic pop
     server_requests->allocate_buffer(size, format, usage);
 }
 

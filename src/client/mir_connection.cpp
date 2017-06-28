@@ -17,14 +17,15 @@
  */
 
 #include "mir_connection.h"
+#include "drag_and_drop.h"
 #include "mir_surface.h"
 #include "mir_prompt_session.h"
 #include "mir_toolkit/extensions/graphics_module.h"
 #include "mir_protobuf.pb.h"
 #include "make_protobuf_object.h"
 #include "mir_toolkit/mir_platform_message.h"
-#include "mir/client_platform.h"
-#include "mir/client_platform_factory.h"
+#include "mir/client/client_platform.h"
+#include "mir/client/client_platform_factory.h"
 #include "rpc/mir_basic_rpc_channel.h"
 #include "mir/dispatch/dispatchable.h"
 #include "mir/dispatch/threaded_dispatcher.h"
@@ -40,13 +41,14 @@
 #include "render_surface.h"
 #include "error_render_surface.h"
 #include "presentation_chain.h"
-#include "error_chain.h"
 #include "logging/perf_report.h"
 #include "lttng/perf_report.h"
 #include "buffer_factory.h"
 #include "mir/require.h"
 #include "mir/uncaught.h"
 
+#include "mir/input/mir_input_config.h"
+#include "mir/input/mir_input_config_serialization.h"
 #include "mir/events/event_builders.h"
 #include "mir/logging/logger.h"
 #include "mir/platform_message.h"
@@ -67,6 +69,7 @@ namespace mev = mir::events;
 namespace gp = google::protobuf;
 namespace mf = mir::frontend;
 namespace mp = mir::protobuf;
+namespace mi = mir::input;
 namespace ml = mir::logging;
 namespace geom = mir::geometry;
 
@@ -273,6 +276,21 @@ catch (std::exception& ex)
     MIR_LOG_UNCAUGHT_EXCEPTION(ex);
 }
 
+void send_resize_event_if_needed(MirWindow *window, MirWindowSpec const& spec, mir::protobuf::Surface const& surface_proto)
+{
+    if (spec.width.is_set() && spec.height.is_set() && spec.event_handler.is_set())
+    {
+        mir::geometry::Size requested_size{spec.width.value(), spec.height.value()};
+        mir::geometry::Size actual_size{surface_proto.width(), surface_proto.height()};
+        auto event_handler = spec.event_handler.value();
+        if (requested_size != actual_size)
+        {
+            auto event = mev::make_event(mf::SurfaceId{surface_proto.id().value()}, actual_size);
+            event_handler.callback(window, event.get(), event_handler.context);
+        }
+    }
+}
+
 std::mutex connection_guard;
 MirConnection* valid_connections{nullptr};
 }
@@ -324,7 +342,6 @@ MirConnection::MirConnection(
         display_configuration_response{mcl::make_protobuf_object<mir::protobuf::DisplayConfiguration>()},
         set_base_display_configuration_response{mcl::make_protobuf_object<mir::protobuf::Void>()},
         client_platform_factory(conf.the_client_platform_factory()),
-        input_platform(conf.the_input_platform()),
         display_configuration(conf.the_display_configuration()),
         input_devices{conf.the_input_devices()},
         lifecycle_control(conf.the_lifecycle_control()),
@@ -463,13 +480,14 @@ void MirConnection::surface_created(SurfaceCreationRequest* request)
     else
     {
         surf = std::make_shared<MirWindow>(
-            this, server, &debug, default_stream, input_platform, spec, *surface_proto, request->wh);
+            this, server, &debug, default_stream, spec, *surface_proto, request->wh);
         surface_map->insert(mf::SurfaceId{surface_proto->id().value()}, surf);
     }
 
     callback(surf.get(), context);
     request->wh->result_received();
 
+    send_resize_event_if_needed(surf.get(), spec, *surface_proto);
     surface_requests.erase(request_it);
 }
 
@@ -585,16 +603,16 @@ void MirConnection::connected(MirConnectedCallback callback, void * context)
 
         connect_done = true;
 
-        if (connect_result->has_coordinate_translation_present() &&
-            connect_result->coordinate_translation_present())
-        {
-            translation_ext = MirExtensionWindowCoordinateTranslationV1{ translate_coordinates };
-        }
+        translation_ext = MirExtensionWindowCoordinateTranslationV1{ translate_coordinates };
+        graphics_module_extension = MirExtensionGraphicsModuleV1 { get_graphics_module };
 
-        if (connect_result->has_platform() &&
-            connect_result->platform().has_graphics_module())
+        for ( auto i = 0; i < connect_result->extension().size(); i++)
         {
-            graphics_module_extension = MirExtensionGraphicsModuleV1 { get_graphics_module };
+            auto& ex = connect_result->extension(i);
+            std::vector<int> versions;
+            for ( auto j = 0; j < connect_result->extension(i).version().size(); j++ )
+                versions.push_back(connect_result->extension(i).version(j));
+            extensions.push_back({ex.name(), versions});
         }
 
         /*
@@ -1269,7 +1287,6 @@ void MirConnection::allocate_buffer(
     MirBufferCallback callback, void* context)
 {
     mp::BufferAllocation request;
-    request.mutable_id()->set_value(-1);
     auto buffer_request = request.add_buffer_requests();
     buffer_request->set_width(size.width.as_int());
     buffer_request->set_height(size.height.as_int());
@@ -1444,10 +1461,58 @@ void* MirConnection::request_interface(char const* name, int version)
     if (!platform)
         BOOST_THROW_EXCEPTION(std::invalid_argument("cannot query extensions before connecting to server"));
 
+    auto supported = std::find_if(extensions.begin(), extensions.end(),
+        [&](auto& e) {
+            return e.name == std::string{name} &&
+                std::find(e.version.begin(), e.version.end(), version) != e.version.end();
+        });
+    if (supported == extensions.end())
+        return nullptr;
+
     if (!strcmp(name, "mir_extension_window_coordinate_translation") && (version == 1) && translation_ext.is_set())
         return &translation_ext.value();
-    if (!strcmp(name, "mir_extension_graphics_module") && (version == 1) && graphics_module_extension.is_set())
-        return &graphics_module_extension.value();
+    if (!strcmp(name, "mir_drag_and_drop") && (version == 1))
+        return const_cast<MirDragAndDropV1*>(mir::drag_and_drop::v1);
 
+    //this extension should move to the platform plugin.
+    if (!strcmp(name, "mir_extension_graphics_module") && (version == 1))
+        return &graphics_module_extension.value();
     return platform->request_interface(name, version);
+}
+
+void MirConnection::apply_input_configuration(MirInputConfig const* config)
+{
+    auto store_error_result = create_stored_error_result<mp::Void>(error_handler);
+
+    mp::InputConfigurationRequest request;
+    request.set_input_configuration(mi::serialize_input_config(*config));
+
+    server.apply_input_configuration(&request,
+                                     store_error_result->result.get(),
+                                     gp::NewCallback(&handle_structured_error, store_error_result));
+}
+
+void MirConnection::set_base_input_configuration(MirInputConfig const* config)
+{
+    auto store_error_result = create_stored_error_result<mp::Void>(error_handler);
+
+    mp::InputConfigurationRequest request;
+    request.set_input_configuration(mi::serialize_input_config(*config));
+
+    server.set_base_input_configuration(&request,
+                                        store_error_result->result.get(),
+                                        gp::NewCallback(&handle_structured_error, store_error_result));
+}
+
+void MirConnection::enumerate_extensions(
+    void* context,
+    void (*enumerator)(void* context, char const* extension, int version))
+{
+    for(auto const& extension : extensions)
+    {
+        for(auto const version : extension.version)
+        {
+            enumerator(context, extension.name.c_str(), version);
+        }
+    }
 }

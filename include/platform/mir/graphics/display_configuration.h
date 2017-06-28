@@ -24,7 +24,10 @@
 #include "mir/geometry/rectangle.h"
 #include "mir/geometry/point.h"
 #include "mir/graphics/gamma_curves.h"
+#include "mir/optional_value.h"
 #include "mir_toolkit/common.h"
+
+#include <glm/glm.hpp>
 
 #include <functional>
 #include <vector>
@@ -130,10 +133,22 @@ struct DisplayConfigurationOutput
     /** EDID of the display, if non-empty */
     std::vector<uint8_t> edid;
 
+    mir::optional_value<geometry::Size> custom_logical_size;
+
     /** The logical rectangle occupied by the output, based on its position,
         current mode and orientation (rotation) */
     geometry::Rectangle extents() const;
     bool valid() const;
+
+    /**
+     * The additional transformation (if any) that this output must undergo
+     * to appear correctly on screen, including rotation (orientation),
+     * inversion and skew.
+     *   Note that scaling and translation are not part of this transformation
+     * matrix because those are already built in to the extents() rectangle
+     * for the renderer to use in compositing.
+     */
+    glm::mat2 transformation() const;
 };
 
 /**
@@ -162,6 +177,7 @@ struct UserDisplayConfigurationOutput
     GammaCurves& gamma;
     MirOutputGammaSupported const& gamma_supported;
     std::vector<uint8_t const> const& edid;
+    mir::optional_value<geometry::Size>& custom_logical_size;
 
     UserDisplayConfigurationOutput(DisplayConfigurationOutput& master);
     geometry::Rectangle extents() const;

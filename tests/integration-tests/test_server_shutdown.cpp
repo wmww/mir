@@ -31,7 +31,6 @@
 #include "mir_test_framework/testing_server_configuration.h"
 
 #include "mir/test/doubles/null_display_buffer_compositor_factory.h"
-#include "mir/test/doubles/stub_frame_dropping_policy_factory.h"
 
 #include "mir/test/doubles/stub_renderer.h"
 
@@ -93,15 +92,21 @@ struct ClientWithSurface
 
     void swap_sync()
     {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         mir_buffer_stream_swap_buffers_sync(
             mir_window_get_buffer_stream(window));
+#pragma GCC diagnostic pop
     }
 
     void swap_async()
     {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         mir_buffer_stream_swap_buffers(
             mir_window_get_buffer_stream(window),
             null_buffer_stream_callback, nullptr);
+#pragma GCC diagnostic pop
     }
 
     MirConnection* const connection;
@@ -119,12 +124,6 @@ TEST_F(ServerShutdown, server_can_shut_down_when_clients_are_blocked)
         {
             return display_buffer_compositor_factory(
                 [] { return std::make_shared<mtd::NullDisplayBufferCompositorFactory>(); });
-        }
-        // Don't drop frames, so the clients can block waiting for a buffer
-        std::shared_ptr<mc::FrameDroppingPolicyFactory> the_frame_dropping_policy_factory() override
-        {
-            return frame_dropping_policy_factory(
-                [] { return std::make_shared<mtd::StubFrameDroppingPolicyFactory>(); });
         }
     };
     server_configuration.reset(new ServerConfig{});
@@ -209,7 +208,7 @@ TEST(ServerShutdownWithThreadException,
             the_display_buffer_compositor_factory() override
         {
             return display_buffer_compositor_factory(
-                [this]()
+                []()
                 {
                     return std::make_shared<ExceptionThrowingDisplayBufferCompositorFactory>();
                 });

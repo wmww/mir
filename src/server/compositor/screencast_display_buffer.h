@@ -112,16 +112,18 @@ public:
 
     void swap_buffers() override;
 
-    MirOrientation orientation() const override;
-
-    MirMirrorMode mirror_mode() const override;
+    glm::mat2 transformation() const override;
 
     NativeDisplayBuffer* native_display_buffer() override;
+
+    geometry::Size renderbuffer_size();
+    void set_renderbuffer_size(geometry::Size);
+    void set_transformation(glm::mat2 const& transform);
 
 private:
     std::unique_ptr<renderer::gl::Context> gl_context;
     geometry::Rectangle const rect;
-    MirMirrorMode const mirror_mode_;
+    glm::mat2 transform;
 
     Schedule& free_queue;
     Schedule& ready_queue;
@@ -133,6 +135,8 @@ private:
     detail::GLResource<glDeleteTextures> color_tex;
     detail::GLResource<glDeleteRenderbuffers> depth_rbo;
     detail::GLResource<glDeleteFramebuffers> fbo;
+
+    geometry::Size current_size;
 };
 
 }

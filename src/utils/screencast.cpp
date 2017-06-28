@@ -50,15 +50,6 @@ namespace
 
 std::atomic<bool> running;
 
-/* On devices with android based openGL drivers, the vendor dispatcher table
- * may be optimized if USE_FAST_TLS_KEY is set, which hardcodes a TLS slot where
- * the vendor opengl function pointers live. Since glibc is not aware of this
- * use, collisions may happen.
- * Allocating a thread_local array helps avoid collisions by any thread_local usage
- * in async/future implementations.
- */
-thread_local int dummy_tls[2];
-
 struct ScreencastConfiguration
 {
     uint32_t width;
@@ -350,7 +341,8 @@ public:
         static EGLint const context_attribs[] = {
             EGL_CONTEXT_CLIENT_VERSION, 2,
             EGL_NONE };
-
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         auto native_display =
             reinterpret_cast<EGLNativeDisplayType>(
                 mir_connection_get_egl_native_display(connection));
@@ -358,7 +350,7 @@ public:
         auto native_window =
             reinterpret_cast<EGLNativeWindowType>(
                 mir_buffer_stream_get_egl_native_window(buffer_stream));
-
+#pragma GCC diagnostic pop
         egl_display = eglGetDisplay(native_display);
 
         eglInitialize(egl_display, nullptr, nullptr);
@@ -462,9 +454,6 @@ try
     bool use_std_out = false;
     bool query_params_only = false;
     int capture_interval = 1;
-
-    //avoid unused warning/error
-    dummy_tls[0] = 0;
 
     po::options_description desc("Usage");
     desc.add_options()

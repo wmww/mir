@@ -30,6 +30,8 @@
 #include <time.h>
 #include <GLES2/gl2.h>
 
+MirRenderSurface* render_surface;
+
 void animate_cursor(MirBufferStream *stream)
 {
     // mir_pixel_format_argb_8888 as set below
@@ -66,17 +68,22 @@ void animate_cursor(MirBufferStream *stream)
     mir_buffer_stream_swap_buffers_sync(stream);
 }
 
-MirBufferStream* make_cursor_stream(MirConnection *connection, MirWindow *surface)
+MirBufferStream* make_cursor_surface(MirConnection *connection, MirWindow *window)
 {
-    MirBufferStream* stream = mir_connection_create_buffer_stream_sync(connection,
-      24, 24, mir_pixel_format_argb_8888, mir_buffer_usage_software);
+    render_surface =
+        mir_connection_create_render_surface_sync(connection, 24, 24);
+
+    MirBufferStream* stream =
+        mir_render_surface_get_buffer_stream(render_surface, 24, 24, mir_pixel_format_argb_8888);
 
     animate_cursor(stream);
 
-    MirCursorConfiguration* conf = mir_cursor_configuration_from_buffer_stream(stream, 0, 0);
-    mir_window_configure_cursor(surface, conf);
-    mir_cursor_configuration_destroy(conf);
-    
+    MirWindowSpec *spec = mir_create_window_spec(connection);
+    mir_window_spec_set_cursor_render_surface(spec, render_surface, 0 , 0);
+
+    mir_window_apply_spec(window, spec);
+    mir_window_spec_release(spec);
+
     return stream;
 }
 
@@ -91,13 +98,15 @@ int main(int argc, char *argv[])
     glClear(GL_COLOR_BUFFER_BIT);
     mir_eglapp_swap_buffers();
 
-    MirBufferStream* stream = make_cursor_stream(mir_eglapp_native_connection(),
+    MirBufferStream* stream = make_cursor_surface(mir_eglapp_native_connection(),
         mir_eglapp_native_window());
 
     while (mir_eglapp_running())
     {
         animate_cursor(stream);
     }
+
+    mir_render_surface_release(render_surface);
 
     mir_eglapp_cleanup();
 

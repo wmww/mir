@@ -24,9 +24,11 @@
 #include "mir/input/device.h"
 #include "mir/input/input_device_hub.h"
 #include "mir/input/input_device_observer.h"
+#include "mir/input/input_manager.h"
 #include "mir/input/mir_input_config.h"
 #include "mir/input/mir_pointer_config.h"
 #include "mir/input/mir_touchpad_config.h"
+#include "mir/input/mir_touchscreen_config.h"
 #include "mir/input/mir_keyboard_config.h"
 #include "mir/client_visible_error.h"
 
@@ -71,6 +73,10 @@ void apply_device_config(MirInputDevice const* config, mi::Device& device)
     if (config->has_touchpad_config() && existing_tpd_conf.is_set())
         device.apply_touchpad_configuration(config->touchpad_config());
 
+    auto existing_ts_conf = device.touchscreen_configuration();
+    if (config->has_touchscreen_config() && existing_ts_conf.is_set())
+        device.apply_touchscreen_configuration(config->touchscreen_config());
+
     auto existing_kbd_conf = device.keyboard_configuration();
     if (config->has_keyboard_config() && existing_kbd_conf.is_set())
         device.apply_keyboard_configuration(config->keyboard_config());
@@ -86,6 +92,10 @@ MirInputDevice get_device_config(mi::Device const& device)
     auto tpd_conf = device.touchpad_configuration();
     if (tpd_conf.is_set())
         cfg.set_touchpad_config(tpd_conf.value());
+
+    auto ts_conf = device.touchscreen_configuration();
+    if (ts_conf.is_set())
+        cfg.set_touchscreen_config(ts_conf.value());
 
     auto kbd_conf = device.keyboard_configuration();
     if (kbd_conf.is_set())
@@ -126,7 +136,6 @@ struct DeviceChangeTracker : mi::InputDeviceObserver
     mi::ConfigChanger& config_changer;
     std::vector<std::shared_ptr<mi::Device>> added;
     std::vector<MirInputDeviceId> removed;
-    bool devices_changed;
 };
 
 }
@@ -135,11 +144,13 @@ mi::ConfigChanger::ConfigChanger(
     std::shared_ptr<InputManager> const& manager,
     std::shared_ptr<InputDeviceHub> const& devices,
     std::shared_ptr<scene::SessionContainer> const& session_container,
-    std::shared_ptr<scene::SessionEventHandlerRegister> const& session_event_handler_register)
+    std::shared_ptr<scene::SessionEventHandlerRegister> const& session_event_handler_register,
+    std::shared_ptr<InputDeviceHub> const& devices_wrapper)
     : input_manager{manager},
       devices{devices},
       session_container{session_container},
       session_event_handler_register{session_event_handler_register},
+      devices_wrapper_DO_NOT_USE{devices_wrapper},
       device_observer(std::make_shared<DeviceChangeTracker>(*this)),
       base_configuration_applied(true)
 {
@@ -262,6 +273,7 @@ void mi::ConfigChanger::session_stopping_handler(std::shared_ptr<ms::Session> co
 
 void mi::ConfigChanger::apply_config(MirInputConfig const& config)
 {
+    input_manager->pause_for_config();
     devices->for_each_mutable_input_device(
         [&config](Device& device)
         {
@@ -269,6 +281,7 @@ void mi::ConfigChanger::apply_config(MirInputConfig const& config)
             apply_device_config(device_config, device);
         });
     base_configuration_applied = false;
+    input_manager->continue_after_config();
 }
 
 void mi::ConfigChanger::apply_config_at_session(MirInputConfig const& config, std::shared_ptr<mf::Session> const& session)

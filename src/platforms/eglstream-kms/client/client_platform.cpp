@@ -19,8 +19,8 @@
 #include "mir_toolkit/mir_client_library.h"
 #include "client_platform.h"
 #include "client_buffer_factory.h"
-#include "mir/client_buffer_factory.h"
-#include "mir/client_context.h"
+#include "mir/client/client_buffer_factory.h"
+#include "mir/client/client_context.h"
 #include "native_buffer.h"
 
 #include <cstring>
@@ -91,7 +91,10 @@ uint32_t mcle::ClientPlatform::native_format_for(MirPixelFormat) const
     BOOST_THROW_EXCEPTION(std::runtime_error{"no buffer support"});
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 uint32_t mcle::ClientPlatform::native_flags_for(MirBufferUsage, mir::geometry::Size) const
 {
+#pragma GCC diagnostic pop
     BOOST_THROW_EXCEPTION(std::runtime_error{"no buffer support"});
 }

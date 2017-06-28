@@ -38,6 +38,7 @@
 
 #include <libinput.h>
 #include <linux/input.h>  // only used to get constants for input reports
+#include <dlfcn.h>
 
 #include <boost/exception/diagnostic_information.hpp>
 #include <cstring>
@@ -50,8 +51,68 @@ namespace mi = mir::input;
 namespace mie = mi::evdev;
 using namespace std::literals::chrono_literals;
 
+namespace
+{
+double touch_major(libinput_event_touch*, uint32_t, uint32_t)
+{
+    return 8;
+}
+double touch_minor(libinput_event_touch*, uint32_t, uint32_t)
+{
+    return 6;
+}
+double pressure(libinput_event_touch*)
+{
+    return 0.8;
+}
+double orientation(libinput_event_touch*)
+{
+    return 0;
+}
+
+template<typename T> auto load_function(char const* sym)
+{
+    T result{};
+    dlerror();
+    (void*&)result = dlsym(RTLD_DEFAULT, sym);
+    char const *error = dlerror();
+
+    if (error)
+        throw std::runtime_error(error);
+    if (!result)
+        throw std::runtime_error("no valid function address");
+
+    return result;
+}
+}
+
+struct mie::LibInputDevice::ContactExtension
+{
+    ContactExtension()
+    {
+        constexpr const char touch_major_sym[] = "libinput_event_touch_get_major_transformed";
+        constexpr const char touch_minor_sym[] = "libinput_event_touch_get_minor_transformed";
+        constexpr const char orientation_sym[] = "libinput_event_touch_get_orientation";
+        constexpr const char pressure_sym[] = "libinput_event_touch_get_pressure";
+
+        try
+        {
+            get_touch_major = load_function<decltype(&touch_major)>(touch_major_sym);
+            get_touch_minor = load_function<decltype(&touch_minor)>(touch_minor_sym);
+            get_orientation = load_function<decltype(&orientation)>(orientation_sym);
+            get_pressure = load_function<decltype(&pressure)>(pressure_sym);
+        }
+        catch(...) {}
+    }
+
+    decltype(&touch_major) get_touch_major{&touch_major};
+    decltype(&touch_minor) get_touch_minor{&touch_minor};
+    decltype(&pressure) get_pressure{&pressure};
+    decltype(&orientation) get_orientation{&orientation};
+};
+
 mie::LibInputDevice::LibInputDevice(std::shared_ptr<mi::InputReport> const& report, LibInputDevicePtr dev)
-    : report{report}, pointer_pos{0, 0}, button_state{0}
+    : contact_extension{std::make_unique<ContactExtension>()}, report{report}, pointer_pos{0, 0}, button_state{0}
 {
     add_device_of_group(std::move(dev));
 }
@@ -114,7 +175,10 @@ void mie::LibInputDevice::process_event(libinput_event* event)
             // Not yet provided by libinput.
             break;
         case LIBINPUT_EVENT_TOUCH_FRAME:
-            sink->handle_input(*convert_touch_frame(libinput_event_get_touch_event(event)));
+            if (is_output_active())
+            {
+                sink->handle_input(*convert_touch_frame(libinput_event_get_touch_event(event)));
+            }
             break;
         default:
             break;
@@ -184,6 +248,7 @@ mir::EventUPtr mie::LibInputDevice::convert_absolute_motion_event(libinput_event
     auto const action = mir_pointer_action_motion;
     auto const hscroll_value = 0.0f;
     auto const vscroll_value = 0.0f;
+    // either the bounding box .. or the specific output ..
     auto const screen = sink->bounding_rectangle();
     uint32_t const width = screen.size.width.as_int();
     uint32_t const height = screen.size.height.as_int();
@@ -290,16 +355,19 @@ void mie::LibInputDevice::handle_touch_up(libinput_event_touch* touch)
 
 void mie::LibInputDevice::update_contact_data(ContactData & data, MirTouchAction action, libinput_event_touch* touch)
 {
-    auto const screen = sink->bounding_rectangle();
-    uint32_t const width = screen.size.width.as_int();
-    uint32_t const height = screen.size.height.as_int();
+    auto info = get_output_info();
+
+    uint32_t width = info.output_size.width.as_int();
+    uint32_t height = info.output_size.height.as_int();
 
     data.action = action;
-    data.pressure = libinput_event_touch_get_pressure(touch);
     data.x = libinput_event_touch_get_x_transformed(touch, width);
     data.y = libinput_event_touch_get_y_transformed(touch, height);
-    data.major = libinput_event_touch_get_major_transformed(touch, width, height);
-    data.minor = libinput_event_touch_get_minor_transformed(touch, width, height);
+    data.major = contact_extension->get_touch_major(touch, width, height);
+    data.minor = contact_extension->get_touch_minor(touch, width, height);
+    data.pressure = contact_extension->get_pressure(touch);
+
+    info.transform_to_scene(data.x, data.y);
 }
 
 void mie::LibInputDevice::handle_touch_motion(libinput_event_touch* touch)
@@ -317,8 +385,8 @@ void mie::LibInputDevice::update_device_info()
 {
     auto dev = device();
     std::string name = libinput_device_get_name(dev);
-    std::stringstream unique_id(name);
-    unique_id << '-' << libinput_device_get_sysname(dev) << '-' <<
+    std::stringstream unique_id;
+    unique_id << name << '-' << libinput_device_get_sysname(dev) << '-' <<
         libinput_device_get_id_vendor(dev) << '-' <<
         libinput_device_get_id_product(dev);
     mi::DeviceCapabilities caps;
@@ -351,6 +419,10 @@ void mie::LibInputDevice::update_device_info()
         }
     }
 
+    if (contains(caps, mi::DeviceCapability::touchscreen) &&
+        !contains(info.capabilities, mi::DeviceCapability::touchscreen))
+        touchscreen = mi::TouchscreenSettings{};
+
     info = mi::InputDeviceInfo{name, unique_id.str(), caps};
 }
 
@@ -362,6 +434,40 @@ libinput_device_group* mie::LibInputDevice::group()
 libinput_device* mie::LibInputDevice::device() const
 {
     return devices.front().get();
+}
+
+mi::OutputInfo mie::LibInputDevice::get_output_info() const
+{
+    if (touchscreen.is_set() && touchscreen.value().mapping_mode == mir_touchscreen_mapping_mode_to_output)
+    {
+        return sink->output_info(touchscreen.value().output_id);
+    }
+    else
+    {
+        auto scene_bbox = sink->bounding_rectangle();
+        return mi::OutputInfo(
+            true,
+            scene_bbox.size,
+            mi::OutputInfo::Matrix{{1.0f, 0.0f, float(scene_bbox.top_left.x.as_int()),
+                                    0.0f, 1.0f, float(scene_bbox.top_left.y.as_int())}});
+    }
+}
+
+bool mie::LibInputDevice::is_output_active() const
+{
+    if (!sink)
+        return false;
+
+    if (touchscreen.is_set())
+    {
+        auto const& touchscreen_config = touchscreen.value();
+        if (touchscreen_config.mapping_mode == mir_touchscreen_mapping_mode_to_output)
+        {
+            auto output = sink->output_info(touchscreen_config.output_id);
+            return output.active;
+        }
+    }
+    return true;
 }
 
 mir::optional_value<mi::PointerSettings> mie::LibInputDevice::get_pointer_settings() const
@@ -480,4 +586,14 @@ void mie::LibInputDevice::apply_settings(mi::TouchpadSettings const& settings)
     libinput_device_config_middle_emulation_set_enabled(dev, settings.middle_mouse_button_emulation ?
                                                                  LIBINPUT_CONFIG_MIDDLE_EMULATION_ENABLED :
                                                                  LIBINPUT_CONFIG_MIDDLE_EMULATION_DISABLED);
+}
+
+mir::optional_value<mi::TouchscreenSettings> mie::LibInputDevice::get_touchscreen_settings() const
+{
+    return touchscreen;
+}
+
+void mie::LibInputDevice::apply_settings(mi::TouchscreenSettings const& settings)
+{
+    touchscreen = settings;
 }

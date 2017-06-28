@@ -16,6 +16,8 @@
  * Authored by: Kevin DuBois <kevin.dubois@canonical.com>
  */
 
+#include "event_sender.h"
+#include "mir/events/event.h"
 #include "mir/frontend/client_constants.h"
 #include "mir/graphics/display_configuration.h"
 #include "mir/variable_length_array.h"
@@ -25,8 +27,6 @@
 #include "mir/input/mir_pointer_config.h"
 #include "mir/input/mir_touchpad_config.h"
 #include "mir/input/mir_keyboard_config.h"
-#include "event_sender.h"
-#include "mir/events/serialization.h"
 #include "message_sender.h"
 #include "protobuf_buffer_packer.h"
 
@@ -52,17 +52,13 @@ mfd::EventSender::EventSender(
 
 void mfd::EventSender::handle_event(MirEvent const& e)
 {
-    // Limit the types of events we wish to send over protobuf, for now.
-    if (mir_event_get_type(&e) != mir_event_type_input)
-    {
-        // In future we might send multiple events, or insert them into messages
-        // containing other responses, but for now we send them individually.
-        mp::EventSequence seq;
-        mp::Event *ev = seq.add_event();
-        ev->set_raw(mev::serialize_event(e));
+    // In future we might send multiple events, or insert them into messages
+    // containing other responses, but for now we send them individually.
+    mp::EventSequence seq;
+    mp::Event *ev = seq.add_event();
+    ev->set_raw(MirEvent::serialize(&e));
 
-        send_event_sequence(seq, {});
-    }
+    send_event_sequence(seq, {});
 }
 
 void mfd::EventSender::handle_display_config_change(

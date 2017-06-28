@@ -22,7 +22,7 @@
 #include "mir/test/fake_shared.h"
 #include "src/client/presentation_chain.h"
 #include "src/client/buffer_factory.h"
-#include "mir/client_buffer_factory.h"
+#include "mir/client/client_buffer_factory.h"
 
 #include <mutex>
 #include <condition_variable>
@@ -49,7 +49,10 @@ struct PresentationChain : Test
     MirConnection* connection {reinterpret_cast<MirConnection*>(this)};
     geom::Size size {100, 200};
     MirPixelFormat format = mir_pixel_format_abgr_8888;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     MirBufferUsage usage = mir_buffer_usage_software;
+#pragma GCC diagnostic pop
     mtd::MockProtobufServer mock_server;
     int buffer_id {4312};
     mp::Buffer ipc_buf;

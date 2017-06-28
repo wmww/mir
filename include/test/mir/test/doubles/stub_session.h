@@ -28,7 +28,7 @@ namespace test
 namespace doubles
 {
 
-struct StubSession : scene::Session, frontend::SessionExtensions
+struct StubSession : scene::Session
 {
     StubSession(pid_t pid = -1);
 
@@ -36,8 +36,6 @@ struct StubSession : scene::Session, frontend::SessionExtensions
         frontend::SurfaceId surface) const override;
 
     std::string name() const override;
-
-    void drop_outstanding_requests() override;
 
     pid_t process_id() const override;
 
@@ -80,8 +78,6 @@ struct StubSession : scene::Session, frontend::SessionExtensions
 
     frontend::BufferStreamId create_buffer_stream(
         graphics::BufferProperties const& props) override;
-    graphics::BufferID create_buffer(geometry::Size, uint32_t, uint32_t) override;
-    graphics::BufferID create_buffer(geometry::Size, MirPixelFormat) override;
 
     void destroy_buffer_stream(frontend::BufferStreamId stream) override;
 
@@ -94,6 +90,8 @@ struct StubSession : scene::Session, frontend::SessionExtensions
     void send_input_config(MirInputConfig const& config) override;
 
     graphics::BufferID create_buffer(graphics::BufferProperties const& properties) override;
+    graphics::BufferID create_buffer(geometry::Size, MirPixelFormat) override;
+    graphics::BufferID create_buffer(geometry::Size, uint32_t native_format, uint32_t native_flags) override;
     void destroy_buffer(graphics::BufferID) override;
     std::shared_ptr<graphics::Buffer> get_buffer(graphics::BufferID) override;
 

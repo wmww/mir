@@ -40,7 +40,6 @@ extern "C" {
  *   \param [in] connection            The connection
  *   \param [in] width                 Requested buffer width
  *   \param [in] height                Requested buffer height
- *   \param [in] buffer_usage          Requested buffer usage
  *   \param [in] available_callback    The callback called when the buffer
  *                                     is available
  *   \param [in] available_context     The context for the available_callback
@@ -56,7 +55,6 @@ void mir_connection_allocate_buffer(
  *   \param [in] connection            The connection
  *   \param [in] width                 Requested buffer width
  *   \param [in] height                Requested buffer height
- *   \param [in] buffer_usage          Requested buffer usage
  *   \return                           The buffer
  **/
 MirBuffer* mir_connection_allocate_buffer_sync(
@@ -68,7 +66,7 @@ MirBuffer* mir_connection_allocate_buffer_sync(
  *   \param [in] buffer    The buffer
  *   \return               True if the buffer is valid, or false otherwise.
  **/
-bool mir_buffer_is_valid(MirBuffer* buffer);
+bool mir_buffer_is_valid(MirBuffer const* buffer);
 
 /** Retrieve a text description an error associated with a MirBuffer.
  *  The returned string is owned by the library and remains valid until the
@@ -78,7 +76,7 @@ bool mir_buffer_is_valid(MirBuffer* buffer);
  *                         invalid buffer, or the empty string "" if the
  *                         connection is valid.
  **/
-char const *mir_buffer_get_error_message(MirBuffer* buffer);
+char const *mir_buffer_get_error_message(MirBuffer const* buffer);
 
 /**
  * Access the MirBufferPackage
@@ -111,21 +109,21 @@ void mir_buffer_unmap(MirBuffer* buffer);
  *   \param [in] buffer   The buffer
  *   \return              The width of the buffer in pixels
  **/
-unsigned int mir_buffer_get_width(MirBuffer* buffer);
+unsigned int mir_buffer_get_width(MirBuffer const* buffer);
 
 /** Retrieve the height of the buffer in pixels.
  *
  *   \param [in] buffer   The buffer
  *   \return              The height of the buffer in pixels
  **/
-unsigned int mir_buffer_get_height(MirBuffer* buffer);
+unsigned int mir_buffer_get_height(MirBuffer const* buffer);
 
 /** Retrieve the pixel format of the buffer.
  *
  *   \param [in] buffer   The buffer
  *   \return              The pixel format of the buffer
  **/
-MirPixelFormat mir_buffer_get_pixel_format(MirBuffer* buffer);
+MirPixelFormat mir_buffer_get_pixel_format(MirBuffer const* buffer);
 
 /** @} */
 

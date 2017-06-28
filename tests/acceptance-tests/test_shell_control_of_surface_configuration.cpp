@@ -18,7 +18,7 @@
 
 #include "mir/scene/surface.h"
 
-#include "mir_test_framework/connected_client_with_a_surface.h"
+#include "mir_test_framework/connected_client_with_a_window.h"
 
 #include "mir/shell/canonical_window_manager.h"
 
@@ -39,6 +39,8 @@ using namespace std::literals::chrono_literals;
 
 namespace
 {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 struct MockWindowManager : msh::CanonicalWindowManager
 {
     using msh::CanonicalWindowManager::CanonicalWindowManager;
@@ -57,6 +59,7 @@ struct MockWindowManager : msh::CanonicalWindowManager
         return msh::CanonicalWindowManager::set_surface_attribute(session, surface, attrib, value);
     }
 };
+#pragma GCC diagnostic pop
 
 void signal_state_change(MirWindow*, MirEvent const* event, void* context)
 {
@@ -71,7 +74,7 @@ void signal_state_change(MirWindow*, MirEvent const* event, void* context)
     static_cast<mt::Signal*>(context)->raise();
 }
 
-struct ShellSurfaceConfiguration : mtf::ConnectedClientWithASurface
+struct ShellSurfaceConfiguration : mtf::ConnectedClientWithAWindow
 {
     void SetUp() override
     {
@@ -93,7 +96,7 @@ struct ShellSurfaceConfiguration : mtf::ConnectedClientWithASurface
                 return mock_window_manager;
             });
 
-        mtf::ConnectedClientWithASurface::SetUp();
+        mtf::ConnectedClientWithAWindow::SetUp();
 
         auto const spec = mir_create_window_spec(connection);
         mir_window_spec_set_event_handler(spec, &signal_state_change, &received);
