@@ -67,6 +67,8 @@ mt::Stream::Stream(
     swap_buffers();
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 mt::LegacyStream::LegacyStream(MirConnection* connection,
     geom::Size physical_size,
     geom::Rectangle position) :
@@ -173,7 +175,7 @@ void mt::BufferStreamArrangementBase::SetUp()
             return order_tracker;
         });
 
-    ConnectedClientWithASurface::SetUp();
+    ConnectedClientWithAWindow::SetUp();
     server.the_cursor()->hide();
 
     streams.emplace_back(
@@ -190,7 +192,7 @@ void mt::BufferStreamArrangementBase::SetUp()
 void mt::BufferStreamArrangementBase::TearDown()
 {
     streams.clear();
-    ConnectedClientWithASurface::TearDown();
+    ConnectedClientWithAWindow::TearDown();
 }
 
 typedef mt::BufferStreamArrangementBase BufferStreamArrangement;
@@ -296,3 +298,4 @@ TEST_F(BufferStreamArrangement, when_non_default_streams_are_set_surface_get_str
 
     EXPECT_THAT(mir_window_get_buffer_stream(window), Eq(nullptr));
 }
+#pragma GCC diagnostic pop

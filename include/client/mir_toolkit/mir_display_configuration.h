@@ -312,6 +312,51 @@ int mir_output_get_position_x(MirOutput const* output);
 int mir_output_get_position_y(MirOutput const* output);
 
 /**
+ * Get the width of the virtual display space occupied by an output.
+ *
+ * This may not be equal to the width of its current mode, for example if
+ * it is rotated or (in future) cloning another output.
+ *
+ * \param [in]  output  The MirOutput to query
+ * \returns     The width in logical pixels (not physical screen pixels)
+ */
+unsigned int mir_output_get_logical_width(MirOutput const* output);
+
+/**
+ * Get the height of the virtual display space occupied by an output.
+ *
+ * This may not be equal to the height of its current mode, for example if
+ * it is rotated or (in future) cloning another output.
+ *
+ * \param [in]  output  The MirOutput to query
+ * \returns     The height in logical pixels (not physical screen pixels)
+ */
+unsigned int mir_output_get_logical_height(MirOutput const* output);
+
+/**
+ * Set the logical size of the virtual display space occupied by an output.
+ * By default this is the dimensions of the output's current mode, but you
+ * can now set it to an arbitrary size and the compositor will scale
+ * accordingly.
+ *
+ * \param [in] output  The output to modify
+ * \param [in] w       The width in logical view area pixels, or zero to
+ *                     revert to the current display mode dimensions.
+ * \param [in] h       The height in logical view area pixels, or zero to
+ *                     revert to the current display mode dimensions.
+ */
+void mir_output_set_logical_size(MirOutput* output, unsigned w, unsigned h);
+
+/*
+ * Determine if the logical size of an output is user-customized or just
+ * automatically calculated.
+ *
+ * \param [in]  output  The MirOutput to query
+ * \returns     Whether the logical output size has been user-customized.
+ */
+bool mir_output_has_custom_logical_size(MirOutput const* output);
+
+/**
  * Set the coordinates of the top-left point of the output in the virtual
  * display space.
  *

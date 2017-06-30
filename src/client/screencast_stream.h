@@ -20,8 +20,8 @@
 #define MIR_CLIENT_SCREENCAST_STREAM_H
 
 #include "mir_wait_handle.h"
-#include "mir/egl_native_surface.h"
-#include "mir/client_buffer.h"
+#include "mir/client/egl_native_surface.h"
+#include "mir/client/client_buffer.h"
 #include "mir/mir_buffer_stream.h"
 #include "mir/geometry/size.h"
 
@@ -71,8 +71,10 @@ public:
         mir::client::rpc::DisplayServer& server,
         std::shared_ptr<ClientPlatform> const& native_window_factory,
         mir::protobuf::BufferStream const& protobuf_bs);
-
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     MirWindowParameters get_parameters() const override;
+#pragma GCC diagnostic pop
     MirWaitHandle* swap_buffers(std::function<void()> const& done) override;
     std::shared_ptr<mir::client::ClientBuffer> get_current_buffer() override;
     uint32_t get_current_buffer_id() override;
@@ -80,6 +82,7 @@ public:
     MirWaitHandle* set_swap_interval(int interval) override;
     void adopted_by(MirWindow*) override;
     void unadopted_by(MirWindow*) override;
+    std::chrono::microseconds microseconds_till_vblank() const override;
     void set_buffer_cache_size(unsigned int) override;
 
     EGLNativeWindowType egl_native_window() override;

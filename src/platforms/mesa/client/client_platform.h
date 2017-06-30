@@ -18,7 +18,7 @@
 #ifndef MIR_CLIENT_MESA_CLIENT_PLATFORM_H_
 #define MIR_CLIENT_MESA_CLIENT_PLATFORM_H_
 
-#include "mir/client_platform.h"
+#include "mir/client/client_platform.h"
 #include "mir_toolkit/extensions/mesa_drm_auth.h"
 #include "mir_toolkit/extensions/set_gbm_device.h"
 #include "mir_toolkit/extensions/gbm_buffer.h"
@@ -56,7 +56,10 @@ public:
     MirPixelFormat get_egl_pixel_format(EGLDisplay, EGLConfig) const override;
     void set_gbm_device(gbm_device*);
     uint32_t native_format_for(MirPixelFormat) const override;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     uint32_t native_flags_for(MirBufferUsage, mir::geometry::Size) const override;
+#pragma GCC diagnostic pop
 
 private:
     ClientContext* const context;

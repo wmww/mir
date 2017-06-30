@@ -328,22 +328,26 @@ void mir_connection_cancel_base_display_configuration_preview(
     MirConnection* connection);
 
 /**
- * Get a display type that can be used for OpenGL ES 2.0 acceleration.
+ * Get a display type that can be used with EGL.
+ *   \deprecated Use MirConnection * as the native display instead
  *   \param [in] connection  The connection
  *   \return                 An EGLNativeDisplayType that the client can use
  */
-MirEGLNativeDisplayType mir_connection_get_egl_native_display(MirConnection *connection);
+MirEGLNativeDisplayType mir_connection_get_egl_native_display(MirConnection *connection)
+MIR_FOR_REMOVAL_IN_VERSION_1("Use MirConnection * as the native display instead");
 
 /**
  * Get the exact MirPixelFormat to use in creating a surface for a chosen
  * EGLConfig.
+ *   \deprecated Use EGL directly, the EGL implementation will now set correct pixel format"
  *   \param [in] connection  The connection
  *   \param [in] egldisplay  The EGLDisplay for the given config
  *   \param [in] eglconfig   The EGLConfig you have chosen to use
  *   \return                 The MirPixelFormat to use in surface creation
  */
 MirPixelFormat mir_connection_get_egl_pixel_format(
-    MirConnection *connection, void *egldisplay, void *eglconfig);
+    MirConnection *connection, void *egldisplay, void *eglconfig)
+MIR_FOR_REMOVAL_IN_VERSION_1("Use EGL directly, the EGL implementation will now set correct pixel format");
 
 /**
  * Get the list of possible formats that a surface can be created with.
@@ -392,6 +396,44 @@ MIR_FOR_REMOVAL_IN_VERSION_1("use platform specific extensions instead");
 MirInputConfig* mir_connection_create_input_config(MirConnection *connection);
 
 /**
+ * Apply the input configuration for the connection
+ *
+ * Configure the behavior of input device attached to a server when the session
+ * this connection represents is the focused. If the session is not focused
+ * the configuration will be stored for later use.
+ *
+ * The call returns after sending the configuration to the server.
+ *
+ * Errors during application of the configuration will be indicated through
+ * the error callback.
+ *
+ *   \param [in] connection             The connection
+ *   \param [in] config                 The input config
+ */
+void mir_connection_apply_session_input_config(
+    MirConnection* connection, MirInputConfig const* config);
+
+/**
+ * Set the input configuration as base configuration.
+ *
+ * Configure the behavior of input device attached to a server. When
+ * allowed by the shell the configuration will be used as base configuration.
+ *
+ * So whenever the active session has no session specific configuration this
+ * input configuration will be used.
+ *
+ * The call returns after sending the configuration to the server.
+ *
+ * Errors during application of the configuration will be indicated through
+ * the error callback.
+ *
+ *   \param [in] connection             The connection
+ *   \param [in] config                 The input config
+ */
+void mir_connection_set_base_input_config(
+    MirConnection* connection, MirInputConfig const* config);
+
+/**
  * \deprecated  Use mir_input_config_release() instead.
  *
  * Release this snapshot of the input configuration.
@@ -409,7 +451,6 @@ MIR_FOR_REMOVAL_IN_VERSION_1("use mir_input_config_release instead");
  * \param [in] config  The input configuration
  */
 void mir_input_config_release(MirInputConfig const* config);
-
 
 /**
  * Register a callback to be called when the input devices change.
@@ -436,6 +477,28 @@ void mir_connection_set_error_callback(
     MirConnection* connection,
     MirErrorCallback callback,
     void* context);
+
+/**
+ * Returns client API version
+ *
+ * Result of the function should be compared to result of MIR_VERSION_NUMBER
+ *
+ * \return  The client API version
+ */
+unsigned mir_get_client_api_version();
+
+/**
+ * Enumerates the supported extensions
+ *
+ * \param [in]  connection  The connection
+ * \param [out] context     User data passed to the enumerator function
+ * \param [in]  enumerator  The function to be called for each extension
+ *
+ */
+void mir_connection_enumerate_extensions(
+    MirConnection* connection,
+    void* context,
+    void (*enumerator)(void* context, char const* extension, int version));
 
 #ifdef __cplusplus
 }

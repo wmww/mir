@@ -25,8 +25,8 @@
 #include "protobuf_to_native_buffer.h"
 
 #include "mir/log.h"
-#include "mir/client_platform.h"
-#include "mir/client_buffer_factory.h"
+#include "mir/client/client_platform.h"
+#include "mir/client/client_buffer_factory.h"
 #include "mir/frontend/client_constants.h"
 #include "mir_toolkit/mir_native_buffer.h"
 
@@ -169,6 +169,8 @@ void mcl::ScreencastStream::screencast_buffer_received(std::function<void()> don
     screencast_wait_handle.result_received();
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 MirWindowParameters mcl::ScreencastStream::get_parameters() const
 {
     std::lock_guard<decltype(mutex)> lock(mutex);
@@ -180,6 +182,7 @@ MirWindowParameters mcl::ScreencastStream::get_parameters() const
         static_cast<MirBufferUsage>(protobuf_bs->buffer_usage()),
         mir_display_output_id_invalid};
 }
+#pragma GCC diagnostic pop
 
 void mcl::ScreencastStream::swap_buffers_sync()
 {
@@ -273,6 +276,11 @@ void mcl::ScreencastStream::adopted_by(MirWindow*)
 
 void mcl::ScreencastStream::unadopted_by(MirWindow*)
 {
+}
+
+std::chrono::microseconds mcl::ScreencastStream::microseconds_till_vblank() const
+{
+    return std::chrono::microseconds::zero();
 }
 
 void mcl::ScreencastStream::set_size(geom::Size)

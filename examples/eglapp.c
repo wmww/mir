@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <signal.h>
 #include <time.h>
+#include <errno.h>
 #include <string.h>
 #include <EGL/egl.h>
 #include <GLES2/gl2.h>
@@ -33,11 +34,13 @@ float mir_eglapp_background_opacity = 1.0f;
 static const char* appname = "egldemo";
 
 static MirConnection *connection;
+static MirRenderSurface* surface;
 static MirWindow* window;
 static EGLDisplay egldisplay;
 static EGLSurface eglsurface;
 static volatile sig_atomic_t running = 0;
 static double refresh_rate = 0.0;
+static mir_eglapp_bool alt_vsync = 0;
 
 #define CHECK(_cond, _err) \
     if (!(_cond)) \
@@ -50,6 +53,11 @@ void mir_eglapp_cleanup(void)
 {
     eglMakeCurrent(egldisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
     eglTerminate(egldisplay);
+    if (surface)
+    {
+        mir_render_surface_release(surface);
+        surface = NULL;
+    }
     mir_window_release_sync(window);
     window = NULL;
     mir_connection_release(connection);
@@ -153,7 +161,6 @@ double mir_eglapp_display_hz(void)
 
 void mir_eglapp_handle_event(MirWindow* window, MirEvent const* ev, void* unused)
 {
-    (void) window;
     (void) unused;
 
     switch (mir_event_get_type(ev))
@@ -175,12 +182,7 @@ void mir_eglapp_handle_event(MirWindow* window, MirEvent const* ev, void* unused
          * support for event queuing (directing them to another thread) or
          * full single-threaded callbacks. (LP: #1194384).
          */
-        {
-            MirResizeEvent const* resize = mir_event_get_resize_event(ev);
-            printf("Resized to %dx%d\n",
-                   mir_resize_event_get_width(resize),
-                   mir_resize_event_get_height(resize));
-        }
+        egl_app_handle_resize_event(window, mir_event_get_resize_event(ev));
         break;
     case mir_event_type_close_window:
         printf("Received close event from server.\n");
@@ -191,22 +193,20 @@ void mir_eglapp_handle_event(MirWindow* window, MirEvent const* ev, void* unused
     }
 }
 
-static MirOutput const* find_active_output(
-    MirDisplayConfig const* conf)
+void egl_app_handle_resize_event(MirWindow* window, MirResizeEvent const* resize)
 {
-    size_t num_outputs = mir_display_config_get_num_outputs(conf);
+    int const new_width = mir_resize_event_get_width(resize);
+    int const new_height = mir_resize_event_get_height(resize);
 
-    for (size_t i = 0; i < num_outputs; i++)
+    printf("Resized to %dx%d\n", new_width, new_height);
+    if (surface)
     {
-        MirOutput const* output = mir_display_config_get_output(conf, i);
-        MirOutputConnectionState state = mir_output_get_connection_state(output);
-        if (state == mir_output_connection_state_connected && mir_output_is_enabled(output))
-        {
-            return output;
-        }
+        mir_render_surface_set_size(surface, new_width, new_height);
+        MirWindowSpec* spec = mir_create_window_spec(connection);
+        mir_window_spec_add_render_surface(spec, surface, new_width, new_height, 0, 0);
+        mir_window_apply_spec(window, spec);
+        mir_window_spec_release(spec);
     }
-
-    return NULL;
 }
 
 static void show_help(struct mir_eglapp_arg const* const* arg_lists)
@@ -347,6 +347,7 @@ mir_eglapp_bool mir_eglapp_init(int argc, char* argv[],
         {"-h", "!", &help, "Show this help text"},
         {"-m <socket>", "=", &mir_socket, "Mir server socket"},
         {"-n", "!", &no_vsync, "Don't sync to vblank"},
+        {"-v", "!", &alt_vsync, "Sync to vblank using the alternate method (manual timing)"},
         {"-o <id>", "%u", &output_id, "Force placement on output monitor ID"},
         {"-q", "!", &quiet, "Quiet mode (no messages output)"},
         {"-s <width>x<height>", "=", &dims, "Force window size"},
@@ -371,7 +372,7 @@ mir_eglapp_bool mir_eglapp_init(int argc, char* argv[],
         return 0;
     }
 
-    if (no_vsync)
+    if (no_vsync || alt_vsync)
         swapinterval = 0;
 
     if (dims)
@@ -393,8 +394,8 @@ mir_eglapp_bool mir_eglapp_init(int argc, char* argv[],
     connection = mir_connect_sync(mir_socket, appname);
     CHECK(mir_connection_is_valid(connection), "Can't get connection");
 
-    egldisplay = eglGetDisplay(
-                    mir_connection_get_egl_native_display(connection));
+    egldisplay = eglGetDisplay(connection);
+
     CHECK(egldisplay != EGL_NO_DISPLAY, "Can't eglGetDisplay");
 
     ok = eglInitialize(egldisplay, NULL, NULL);
@@ -416,65 +417,42 @@ mir_eglapp_bool mir_eglapp_init(int argc, char* argv[],
     CHECK(ok, "Could not eglChooseConfig");
     CHECK(neglconfigs > 0, "No EGL config available");
 
-    MirPixelFormat pixel_format =
-        mir_connection_get_egl_pixel_format(connection, egldisplay, eglconfig);
-
-    printf("Mir chose pixel format %d.\n", pixel_format);
-    if (alpha_bits == 0)
-    {
-        /*
-         * If we are opaque then it's OK to switch pixel format slightly,
-         * to enable bypass/overlays to work. Otherwise the presence of an
-         * alpha channel would prevent them from being used.
-         * It would be really nice if Mesa just gave us the right answer in
-         * the first place though. (LP: #1480755)
-         */
-        if (pixel_format == mir_pixel_format_abgr_8888)
-            pixel_format = mir_pixel_format_xbgr_8888;
-        else if (pixel_format == mir_pixel_format_argb_8888)
-            pixel_format = mir_pixel_format_xrgb_8888;
-    }
-    printf("Using pixel format %d.\n", pixel_format);
-
-    /* eglapps are interested in the screen size, so
-       use mir_connection_create_display_config */
-    MirDisplayConfig* display_config =
-        mir_connection_create_display_configuration(connection);
-
-    MirOutput const* output = find_active_output(display_config);
-
-    if (output == NULL)
-    {
-        printf("No active outputs found.\n");
-        return 0;
-    }
-
-    MirOutputMode const* mode = mir_output_get_current_mode(output);
-
-    int pos_x = mir_output_get_position_x(output);
-    int pos_y = mir_output_get_position_y(output);
-
-    int mode_width  = mir_output_mode_get_width(mode);
-    int mode_height = mir_output_mode_get_height(mode);
-
-    printf("Current active output is %dx%d %+d%+d\n",
-        mode_width, mode_height,
-        pos_x, pos_y);
-
-    if (fullscreen)  /* TODO: Use surface states for this */
-    {
-        *width  = mode_width;
-        *height = mode_height;
-    }
-
-    mir_display_config_release(display_config);
-
     MirWindowSpec *spec =
         mir_create_normal_window_spec(connection, *width, *height);
 
     CHECK(spec != NULL, "Can't create a window spec");
 
-    mir_window_spec_set_pixel_format(spec, pixel_format);
+    if (fullscreen)
+    {
+        mir_window_spec_set_state(spec, mir_window_state_fullscreen);
+
+        MirDisplayConfig* display_config =
+            mir_connection_create_display_configuration(connection);
+
+        int const count = mir_display_config_get_num_outputs(display_config);
+
+        for (int i = 0; i != count; ++i)
+        {
+            MirOutput const* output = mir_display_config_get_output(display_config, i);
+
+            if (mir_output_get_connection_state(output) == mir_output_connection_state_connected &&
+                mir_output_is_enabled(output))
+            {
+                MirOutputMode const* mode = mir_output_get_current_mode(output);
+                *width = mir_output_mode_get_width(mode);
+                *height = mir_output_mode_get_height(mode);
+
+                break;
+            }
+        }
+
+        mir_display_config_release(display_config);
+    }
+
+    surface = mir_connection_create_render_surface_sync(connection, *width, *height);
+    CHECK(mir_render_surface_is_valid(surface), "could not create surface");
+    CHECK(mir_render_surface_get_error_message(surface), "");
+    mir_window_spec_add_render_surface(spec, surface, *width, *height, 0, 0);
 
     char const* name = argv[0];
     for (char const* p = name; *p; p++)
@@ -483,6 +461,8 @@ mir_eglapp_bool mir_eglapp_init(int argc, char* argv[],
             name = p + 1;
     }
     mir_window_spec_set_name(spec, name);
+    mir_window_spec_set_event_handler(spec, mir_eglapp_handle_event, NULL);
+    mir_window_spec_set_cursor_name(spec, cursor_name);
 
     if (output_id != mir_display_output_id_invalid)
         mir_window_spec_set_fullscreen_on_output(spec, output_id);
@@ -492,16 +472,11 @@ mir_eglapp_bool mir_eglapp_init(int argc, char* argv[],
 
     CHECK(mir_window_is_valid(window), "Can't create a window");
 
-    mir_window_set_event_handler(window, mir_eglapp_handle_event, NULL);
+    eglsurface = eglCreateWindowSurface(egldisplay,
+                                        eglconfig,
+                                        (EGLNativeWindowType)surface,
+                                        NULL);
 
-    spec = mir_create_window_spec(connection);
-    mir_window_spec_set_cursor_name(spec, cursor_name);
-    mir_window_apply_spec(window, spec);
-    mir_window_spec_release(spec);
-
-    eglsurface = eglCreateWindowSurface(egldisplay, eglconfig,
-        (EGLNativeWindowType)mir_buffer_stream_get_egl_native_window(mir_window_get_buffer_stream(window)), NULL);
-    
     CHECK(eglsurface != EGL_NO_SURFACE, "eglCreateWindowSurface failed");
 
     eglctx = eglCreateContext(egldisplay, eglconfig, EGL_NO_CONTEXT,
@@ -510,6 +485,20 @@ mir_eglapp_bool mir_eglapp_init(int argc, char* argv[],
 
     ok = eglMakeCurrent(egldisplay, eglsurface, eglsurface, eglctx);
     CHECK(ok, "Can't eglMakeCurrent");
+
+    EGLint buf_width, buf_height;
+    if (eglQuerySurface(egldisplay, eglsurface, EGL_WIDTH, &buf_width) &&
+        eglQuerySurface(egldisplay, eglsurface, EGL_HEIGHT, &buf_height))
+    {
+        /*
+         * Mir reserves the right to ignore our initial window dimensions and
+         * resize to whatever it likes. In that case, a resize callback to
+         * mir_eglapp_handle_event() has occurred by now and we have resized
+         * the eglsurface.
+         */
+        *width = buf_width;
+        *height = buf_height;
+    }
 
     signal(SIGINT, shutdown);
     signal(SIGTERM, shutdown);

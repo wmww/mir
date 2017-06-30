@@ -16,12 +16,13 @@
  * Authored by: Kevin DuBois <kevin.dubois@canonical.com>
  */
 
-#include "mir/client_buffer.h"
+#include "mir/client/client_buffer.h"
 #include "buffer.h"
 #include <boost/throw_exception.hpp>
 
 namespace mcl = mir::client;
-
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 mcl::Buffer::Buffer(
     MirBufferCallback cb, void* context,
     int buffer_id,
@@ -36,6 +37,7 @@ mcl::Buffer::Buffer(
     usage(usage)
 {
 }
+#pragma GCC diagnostic pop
 
 int mcl::Buffer::rpc_id() const
 {
@@ -101,8 +103,11 @@ MirConnection* mcl::Buffer::allocating_connection() const
     return connection;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 MirBufferUsage mcl::Buffer::buffer_usage() const
 {
+#pragma GCC diagnostic pop
     return usage;
 }
 

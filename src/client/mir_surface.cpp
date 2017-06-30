@@ -24,15 +24,16 @@
 #include "connection_surface_map.h"
 
 #include "mir_toolkit/mir_client_library.h"
+#include "mir_toolkit/mir_blob.h"
 #include "mir/frontend/client_constants.h"
-#include "mir/client_buffer.h"
+#include "mir/client/client_buffer.h"
 #include "mir/mir_buffer_stream.h"
 #include "mir/dispatch/threaded_dispatcher.h"
-#include "mir/input/input_platform.h"
 #include "mir/input/xkb_mapper.h"
 #include "mir/cookie/cookie.h"
 #include "mir_cookie.h"
 #include "mir/time/posix_timestamp.h"
+#include "mir/events/surface_event.h"
 
 #include <cassert>
 #include <unistd.h>
@@ -54,6 +55,25 @@ namespace
 {
 std::mutex handle_mutex;
 std::unordered_set<MirWindow*> valid_surfaces;
+
+void apply_device_state(MirEvent const& event, mi::KeyMapper& keymapper)
+{
+    auto device_state = mir_event_get_input_device_state_event(&event);
+    std::vector<uint32_t> keys;
+
+    for (size_t index = 0, end_index = mir_input_device_state_event_device_count(device_state);
+         index != end_index; ++index)
+    {
+        auto device_id = mir_input_device_state_event_device_id(device_state, index);
+        auto key_count = mir_input_device_state_event_device_pressed_keys_count(device_state, index);
+        for (decltype(key_count) i = 0; i != key_count; ++i)
+            keys.push_back(
+                mir_input_device_state_event_device_pressed_keys_for_index(device_state, index, i));
+
+        keymapper.set_key_state(device_id, keys);
+    }
+}
+
 }
 
 #pragma GCC diagnostic push
@@ -120,7 +140,6 @@ MirSurface::MirSurface(
     mclr::DisplayServer& the_server,
     mclr::DisplayServerDebug* debug,
     std::shared_ptr<MirBufferStream> const& buffer_stream,
-    std::shared_ptr<mircv::InputPlatform> const& input_platform,
     MirWindowSpec const& spec,
     mir::protobuf::Surface const& surface_proto,
     std::shared_ptr<MirWaitHandle> const& handle)
@@ -133,7 +152,6 @@ MirSurface::MirSurface(
       modify_result{mcl::make_protobuf_object<mir::protobuf::Void>()},
       connection_(allocating_connection),
       default_stream(buffer_stream),
-      input_platform(input_platform),
       keymapper(std::make_shared<mircv::XKBMapper>()),
       configure_result{mcl::make_protobuf_object<mir::protobuf::SurfaceSetting>()},
       frame_clock(std::make_shared<FrameClock>()),
@@ -174,12 +192,6 @@ MirSurface::MirSurface(
             this,
             std::placeholders::_1,
             spec.event_handler.value().context);
-    }
-
-    if (surface_proto.fd_size() > 0 && handle_event_callback)
-    {
-        input_thread = std::make_shared<md::ThreadedDispatcher>("Input dispatch", 
-            input_platform->create_input_receiver( surface_proto.fd(0), keymapper, handle_event_callback));
     }
 
     std::lock_guard<decltype(handle_mutex)> lock(handle_mutex);
@@ -297,13 +309,6 @@ MirWaitHandle* MirSurface::request_persistent_id(MirWindowIdCallback callback, v
     return &persistent_id_wait_handle;
 }
 
-/* todo: all these conversion functions are a bit of a kludge, probably
-         better to have a more developed MirPixelFormat that can handle this */
-MirPixelFormat MirSurface::convert_ipc_pf_to_geometry(gp::int32 pf) const
-{
-    return static_cast<MirPixelFormat>(pf);
-}
-
 MirWaitHandle* MirSurface::configure_cursor(MirCursorConfiguration const* cursor)
 {
     mp::CursorSetting setting;
@@ -313,9 +318,11 @@ MirWaitHandle* MirSurface::configure_cursor(MirCursorConfiguration const* cursor
         setting.mutable_surfaceid()->CopyFrom(surface->id());
         if (cursor)
         {
-            if (cursor->stream != nullptr)
+            if (cursor->surface || cursor->stream)
             {
-                setting.mutable_buffer_stream()->set_value(cursor->stream->rpc_id().as_value());
+                auto id = cursor->surface ? cursor->surface->stream_id().as_value() :
+                                            cursor->stream->rpc_id().as_value();
+                setting.mutable_buffer_stream()->set_value(id);
                 setting.set_hotspot_x(cursor->hotspot_x);
                 setting.set_hotspot_y(cursor->hotspot_y);
             }
@@ -467,18 +474,10 @@ void MirSurface::set_event_handler(MirWindowEventCallback callback,
         handle_event_callback = std::bind(callback, this,
                                           std::placeholders::_1,
                                           context);
-
-        if (surface->fd_size() > 0 && handle_event_callback)
-        {
-            auto input_dispatcher = input_platform->create_input_receiver(surface->fd(0),
-                                                                          keymapper,
-                                                                          handle_event_callback);
-            input_thread = std::make_shared<md::ThreadedDispatcher>("Input dispatch", input_dispatcher);
-        }
     }
 }
 
-void MirSurface::handle_event(MirEvent const& e)
+void MirSurface::handle_event(MirEvent& e)
 {
     std::unique_lock<decltype(mutex)> lock(mutex);
 
@@ -489,9 +488,22 @@ void MirSurface::handle_event(MirEvent const& e)
         auto sev = mir_event_get_window_event(&e);
         auto a = mir_window_event_get_attribute(sev);
         if (a < mir_window_attribs)
+        {
             attrib_cache[a] = mir_window_event_get_attribute_value(sev);
+        }
+        else
+        {
+            handle_drag_and_drop_start_callback(sev);
+            return;
+        }
         break;
     }
+    case mir_event_type_input:
+        keymapper->map_event(e);
+        break;
+    case mir_event_type_input_device_state:
+        apply_device_state(e, *keymapper);
+        break;
     case mir_event_type_orientation:
         orientation = mir_orientation_event_get_direction(mir_event_get_orientation_event(&e));
         break;
@@ -573,19 +585,41 @@ MirWaitHandle* MirSurface::set_preferred_orientation(MirOrientationMode mode)
 
 void MirSurface::raise_surface(MirCookie const* cookie)
 {
-    mp::RaiseRequest raise_request;
+    request_operation(cookie, mp::RequestOperation::MAKE_ACTIVE);
+}
+
+void MirSurface::request_user_move(MirCookie const* cookie)
+{
+    request_operation(cookie, mp::RequestOperation::USER_MOVE);
+}
+
+void MirSurface::request_drag_and_drop(MirCookie const* cookie)
+{
+    request_operation(cookie, mp::RequestOperation::START_DRAG_AND_DROP);
+}
+
+void MirSurface::request_operation(MirCookie const* cookie, mir::protobuf::RequestOperation operation) const
+{
+    mir::protobuf::RequestWithAuthority request;
+    request.set_operation(operation);
 
     std::unique_lock<decltype(mutex)> lock(mutex);
-    raise_request.mutable_surface_id()->set_value(surface->id().value());
+    request.mutable_surface_id()->set_value(surface->id().value());
 
-    auto const event_cookie = raise_request.mutable_cookie();
+    auto const event_authority = request.mutable_authority();
 
-    event_cookie->set_cookie(cookie->cookie().data(), cookie->size());
+    event_authority->set_cookie(cookie->cookie().data(), cookie->size());
 
-    server->raise_surface(
-        &raise_request,
+    server->request_operation(
+        &request,
         void_response.get(),
         google::protobuf::NewCallback(google::protobuf::DoNothing));
+}
+
+void MirSurface::set_drag_and_drop_start_handler(std::function<void(MirWindowEvent const*)> const& callback)
+{
+    std::lock_guard<decltype(mutex)> lock(mutex);
+    handle_drag_and_drop_start_callback = callback;
 }
 
 MirBufferStream* MirSurface::get_buffer_stream()
@@ -794,6 +828,11 @@ MirConnection* MirSurface::connection() const
 std::shared_ptr<FrameClock> MirSurface::get_frame_clock() const
 {
     return frame_clock;
+}
+
+std::shared_ptr<mir::input::receiver::XKBMapper> MirSurface::get_keymapper() const
+{
+    return keymapper;
 }
 
 #pragma GCC diagnostic pop

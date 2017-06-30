@@ -277,7 +277,7 @@ public:
 
     virtual std::shared_ptr<MockDisplayConfigurationPolicy> mock_display_configuration_policy()
     {
-        return mock_display_configuration_policy_([this]
+        return mock_display_configuration_policy_([]
             { return std::make_shared<NiceMock<MockDisplayConfigurationPolicy>>(); });
     }
 
@@ -535,14 +535,20 @@ struct ClientWithAPaintedSurface : virtual Client
         Client(nested_mir),
         window(mtf::make_surface(connection, size, format))
     {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         mir_buffer_stream_swap_buffers_sync(mir_window_get_buffer_stream(window));
+#pragma GCC diagnostic pop
     }
 
     ClientWithAPaintedSurface(NestedMirRunner& nested_mir) :
         Client(nested_mir),
         window(mtf::make_any_surface(connection))
     {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         mir_buffer_stream_swap_buffers_sync(mir_window_get_buffer_stream(window));
+#pragma GCC diagnostic pop
     }
 
     ~ClientWithAPaintedSurface()
@@ -562,6 +568,8 @@ struct ClientWithAPaintedSurface : virtual Client
     MirWindow* window;
 };
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 struct ClientWithAPaintedSurfaceAndABufferStream : virtual Client, ClientWithAPaintedSurface
 {
     ClientWithAPaintedSurfaceAndABufferStream(NestedMirRunner& nested_mir) :
@@ -583,6 +591,32 @@ struct ClientWithAPaintedSurfaceAndABufferStream : virtual Client, ClientWithAPa
 
     MirBufferStream* const buffer_stream;
 };
+
+struct ClientWithAPaintedWindowAndASurface : virtual Client, ClientWithAPaintedSurface
+{
+    ClientWithAPaintedWindowAndASurface(NestedMirRunner& nested_mir) :
+        Client(nested_mir),
+        ClientWithAPaintedSurface(nested_mir),
+        surface(mir_connection_create_render_surface_sync(
+            connection,
+            cursor_size, cursor_size)),
+        buffer_stream(mir_render_surface_get_buffer_stream(
+            surface,
+            cursor_size, cursor_size,
+            mir_pixel_format_argb_8888))
+    {
+        mir_buffer_stream_swap_buffers_sync(buffer_stream);
+    }
+
+    ~ClientWithAPaintedWindowAndASurface()
+    {
+        mir_render_surface_release(surface);
+    }
+
+    MirRenderSurface* const surface;
+    MirBufferStream* const buffer_stream;
+};
+#pragma GCC diagnostic pop
 
 struct ClientWithADisplayChangeCallbackAndAPaintedSurface : virtual Client, ClientWithADisplayChangeCallback, ClientWithAPaintedSurface
 {
@@ -656,8 +690,10 @@ TEST_F(NestedServer, client_sees_set_scaling_factor)
     Client client{nested_mir};
 
     auto spec = mir_create_normal_window_spec(client.connection, 800, 600);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     mir_window_spec_set_pixel_format(spec, mir_pixel_format_abgr_8888);
-
+#pragma GCC diagnostic pop
     mt::Signal surface_event_received;
     mir_window_spec_set_event_handler(spec, [](MirWindow*, MirEvent const* event, void* ctx)
         {
@@ -758,7 +794,10 @@ TEST_F(NestedServerWithTwoDisplays, posts_when_scene_has_visible_changes)
             .WillOnce(InvokeWithoutArgs([]{}))
             .WillOnce(InvokeWithoutArgs([&] { wait.raise(); }));
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         mir_buffer_stream_swap_buffers_sync(mir_window_get_buffer_stream(window));
+#pragma GCC diagnostic pop
 
         wait.wait_for(timeout);
         Mock::VerifyAndClearExpectations(mock_session_mediator_report.get());
@@ -869,9 +908,12 @@ TEST_F(NestedServer, animated_cursor_image_changes_are_forwarded_to_host)
                         test_processed_result.reset();
                     }));
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     auto conf = mir_cursor_configuration_from_buffer_stream(client.buffer_stream, 0, 0);
     mir_window_configure_cursor(client.window, conf);
     mir_cursor_configuration_destroy(conf);
+#pragma GCC diagnostic pop
 
     EXPECT_TRUE(condition.wait_for(timeout));
     condition.reset();
@@ -887,6 +929,53 @@ TEST_F(NestedServer, animated_cursor_image_changes_are_forwarded_to_host)
     }
     Mock::VerifyAndClearExpectations(mock_cursor.get());
 }
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+TEST_F(NestedServer, animated_cursor_image_changes_from_surface_are_forwarded_to_host)
+{
+    int const frames = 10;
+    NestedMirRunner nested_mir{new_connection()};
+
+    ClientWithAPaintedWindowAndASurface client(nested_mir);
+    nested_mir.wait_until_surface_ready(client.window);
+
+    auto const mock_cursor = the_mock_cursor();
+
+    server.the_cursor_listener()->cursor_moved_to(489, 9);
+
+    // FIXME: In this test setup the software cursor will trigger scene_changed() on show(...).
+    // Thus a new frame will be composed. Then a "FramePostObserver" in basic_surface.cpp will
+    // react to the frame_posted callback by setting the cursor buffer again via show(..)
+    // The number of show calls depends solely on scheduling decisions
+    EXPECT_CALL(*mock_cursor, show(_)).Times(AtLeast(frames))
+        .WillRepeatedly(InvokeWithoutArgs(
+                    [&]
+                    {
+                        condition.raise();
+                        test_processed_result.wait_for(timeout);
+                        test_processed_result.reset();
+                    }));
+
+    auto conf = mir_cursor_configuration_from_render_surface(client.surface, 0, 0);
+    mir_window_configure_cursor(client.window, conf);
+    mir_cursor_configuration_destroy(conf);
+
+    EXPECT_TRUE(condition.wait_for(long_timeout));
+    condition.reset();
+    test_processed_result.raise();
+
+    for (int i = 0; i != frames; ++i)
+    {
+        mir_buffer_stream_swap_buffers_sync(client.buffer_stream);
+
+        EXPECT_TRUE(condition.wait_for(timeout));
+        condition.reset();
+        test_processed_result.raise();
+    }
+    Mock::VerifyAndClearExpectations(mock_cursor.get());
+}
+#pragma GCC diagnostic pop
 
 TEST_F(NestedServer, named_cursor_image_changes_are_forwarded_to_host)
 {
@@ -951,9 +1040,12 @@ TEST_F(NestedServer, can_hide_the_host_cursor)
     EXPECT_CALL(*mock_cursor, show(_)).Times(AtLeast(1))
         .WillOnce(mt::WakeUp(&condition));
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     auto conf = mir_cursor_configuration_from_buffer_stream(client.buffer_stream, 0, 0);
     mir_window_configure_cursor(client.window, conf);
     mir_cursor_configuration_destroy(conf);
+#pragma GCC diagnostic pop
 
     std::this_thread::sleep_for(500ms);
     condition.wait_for(timeout);

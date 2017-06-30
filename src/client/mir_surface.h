@@ -25,7 +25,7 @@
 #include "rpc/mir_display_server.h"
 #include "rpc/mir_display_server_debug.h"
 
-#include "mir/client_platform.h"
+#include "mir/client/client_platform.h"
 #include "mir/frontend/surface_id.h"
 #include "mir/optional_value.h"
 #include "mir/geometry/dimensions.h"
@@ -50,7 +50,6 @@ namespace input
 {
 namespace receiver
 {
-class InputPlatform;
 class XKBMapper;
 }
 }
@@ -178,7 +177,6 @@ public:
         mir::client::rpc::DisplayServer& server,
         mir::client::rpc::DisplayServerDebug* debug,
         std::shared_ptr<MirBufferStream> const& buffer_stream,
-        std::shared_ptr<mir::input::receiver::InputPlatform> const& input_platform,
         MirWindowSpec const& spec, mir::protobuf::Surface const& surface_proto,
         std::shared_ptr<MirWaitHandle> const& handle);
 
@@ -202,12 +200,15 @@ public:
     MirWaitHandle* set_preferred_orientation(MirOrientationMode mode);
 
     void raise_surface(MirCookie const* cookie);
+    void request_user_move(MirCookie const* cookie);
+    void request_drag_and_drop(MirCookie const* cookie);
+    void set_drag_and_drop_start_handler(std::function<void(MirWindowEvent const*)> const& callback);
 
     MirWaitHandle* configure_cursor(MirCursorConfiguration const* cursor);
 
     void set_event_handler(MirWindowEventCallback callback,
                            void* context);
-    void handle_event(MirEvent const& e);
+    void handle_event(MirEvent& e);
 
     void request_and_wait_for_configure(MirWindowAttrib a, int value);
 
@@ -221,6 +222,7 @@ public:
     MirConnection* connection() const;
 
     std::shared_ptr<mir::client::FrameClock> get_frame_clock() const;
+    std::shared_ptr<mir::input::receiver::XKBMapper> get_keymapper() const;
 
 private:
     std::mutex mutable mutex; // Protects all members of *this
@@ -229,7 +231,7 @@ private:
     void on_configured();
     void on_cursor_configured();
     void acquired_persistent_id(MirWindowIdCallback callback, void* context);
-    MirPixelFormat convert_ipc_pf_to_geometry(google::protobuf::int32 pf) const;
+    void request_operation(MirCookie const* cookie, mir::protobuf::RequestOperation operation) const;
 
     mir::client::rpc::DisplayServer* const server{nullptr};
     mir::client::rpc::DisplayServerDebug* const debug{nullptr};
@@ -253,7 +255,6 @@ private:
     std::shared_ptr<MirBufferStream> default_stream;
     typedef std::unordered_set<std::shared_ptr<MirBufferStream>> StreamSet;
     StreamSet streams;
-    std::shared_ptr<mir::input::receiver::InputPlatform> const input_platform;
     std::shared_ptr<mir::input::receiver::XKBMapper> const keymapper;
 
     std::unique_ptr<mir::protobuf::SurfaceSetting> const configure_result;
@@ -265,6 +266,8 @@ private:
     std::shared_ptr<mir::client::FrameClock> const frame_clock;
 
     std::function<void(MirEvent const*)> handle_event_callback;
+    std::function<void(MirWindowEvent const*)> handle_drag_and_drop_start_callback = [](auto){};
+
     std::shared_ptr<mir::dispatch::ThreadedDispatcher> input_thread;
 
     //a bit batty, but the creation handle has to exist for as long as the MirSurface does,
@@ -274,7 +277,6 @@ private:
     MirPixelFormat format;
     MirBufferUsage usage;
     uint32_t output_id;
-
 };
 
 #pragma GCC diagnostic pop

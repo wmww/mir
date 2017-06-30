@@ -20,9 +20,8 @@
 #ifndef MIR_INPUT_INPUT_SCENE_H_
 #define MIR_INPUT_INPUT_SCENE_H_
 
-#include "mir/input/input_channel_factory.h"
-
 #include <memory>
+#include <functional>
 
 namespace mir
 {

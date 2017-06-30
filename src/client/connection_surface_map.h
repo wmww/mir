@@ -19,7 +19,7 @@
 #ifndef MIR_CLIENT_CONNECTION_SURFACE_MAP_H_
 #define MIR_CLIENT_CONNECTION_SURFACE_MAP_H_
 
-#include "surface_map.h"
+#include "mir/client/surface_map.h"
 
 #include <shared_mutex>
 #include <unordered_map>
@@ -50,12 +50,13 @@ public:
     void erase(int buffer_id) override;
     std::shared_ptr<MirBuffer> buffer(int buffer_id) const override;
 
+    void erase(void* render_surface_key);
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     void insert(void* render_surface_key, std::shared_ptr<MirRenderSurface> const& render_surface);
-    void erase(void* render_surface_key);
     std::shared_ptr<MirRenderSurface> render_surface(void* render_surface_key) const;
 #pragma GCC diagnostic pop
+    void with_all_windows_do(std::function<void(MirWindow*)> const&) const override;
 private:
     std::shared_timed_mutex mutable guard;
     std::unordered_map<frontend::SurfaceId, std::shared_ptr<MirWindow>> surfaces;

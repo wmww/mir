@@ -31,8 +31,10 @@ public:
     ErrorStream(
         std::string const& error_msg, MirConnection* conn,
         frontend::BufferStreamId id, std::shared_ptr<MirWaitHandle> const& wh);
-
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     MirWindowParameters get_parameters() const override;
+#pragma GCC diagnostic pop
     std::shared_ptr<ClientBuffer> get_current_buffer() override;
     uint32_t get_current_buffer_id() override;
     EGLNativeWindowType egl_native_window() override;
@@ -43,6 +45,7 @@ public:
     MirWaitHandle* set_swap_interval(int interval) override;
     void adopted_by(MirWindow*) override;
     void unadopted_by(MirWindow*) override;
+    std::chrono::microseconds microseconds_till_vblank() const override;
     MirNativeBuffer* get_current_buffer_package() override;
     MirPlatformType platform_type() override;
     frontend::BufferStreamId rpc_id() const override;

@@ -133,9 +133,9 @@ private:
     {
         auto spec = mir_create_normal_window_spec(
             connection, size.width.as_int(), size.height.as_int());
-        mir_window_spec_set_pixel_format(spec, pf);
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+        mir_window_spec_set_pixel_format(spec, pf);
         mir_window_spec_add_render_surface(
             spec, chain.content(), size.width.as_int(), size.height.as_int(), 0, 0);
 #pragma GCC diagnostic pop
@@ -360,7 +360,9 @@ TEST_F(PresentationChain, submission_will_eventually_call_callback)
             buffer_callback, &contexts[i % num_buffers]);
         contexts[i % num_buffers].unavailable();
         if (i != 0)
-            ASSERT_TRUE(contexts[(i-1) % num_buffers].wait_for_buffer(10s)) << "iteration " << i;
+        {
+            ASSERT_TRUE(contexts[(i - 1) % num_buffers].wait_for_buffer(10s)) << "iteration " << i;
+        }
     }
 
     for (auto& context : contexts)
@@ -588,7 +590,9 @@ TEST_F(PresentationChain, mailbox_looks_correct_from_client_perspective)
     {
         buffers[i]->submit_to(window.chain());
         if (i > 0)
-            EXPECT_TRUE(buffers[i-1]->wait_ready(5s));
+        {
+            EXPECT_TRUE(buffers[i - 1]->wait_ready(5s));
+        }
     }
 
     for(auto i = 0u; i < num_buffers - 1; i++)

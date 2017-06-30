@@ -23,8 +23,6 @@
 #include "temporary_buffers.h"
 #include "mir/frontend/client_buffers.h"
 #include "mir/graphics/buffer.h"
-#include "mir/compositor/frame_dropping_policy_factory.h"
-#include "mir/compositor/frame_dropping_policy.h"
 #include <boost/throw_exception.hpp>
 
 namespace mc = mir::compositor;
@@ -38,36 +36,12 @@ enum class mc::Stream::ScheduleMode {
     Dropping
 };
 
-mc::Stream::DroppingCallback::DroppingCallback(Stream* stream) :
-    stream(stream)
-{
-}
-
-void mc::Stream::DroppingCallback::operator()()
-{
-    stream->drop_frame();
-}
-
-void mc::Stream::DroppingCallback::lock()
-{
-    guard_lock = std::unique_lock<std::mutex>{stream->mutex};
-}
-
-void mc::Stream::DroppingCallback::unlock()
-{
-    if (guard_lock.owns_lock())
-        guard_lock.unlock();
-}
-
 mc::Stream::Stream(
-    mc::FrameDroppingPolicyFactory const& policy_factory,
     std::shared_ptr<frontend::ClientBuffers> map, geom::Size size, MirPixelFormat pf) :
-    drop_policy(policy_factory.create_policy(std::make_unique<DroppingCallback>(this))),
     schedule_mode(ScheduleMode::Queueing),
     schedule(std::make_shared<mc::QueueingSchedule>()),
     buffers(map),
-    arbiter(std::make_shared<mc::MultiMonitorArbiter>(
-        mc::MultiMonitorMode::multi_monitor_sync, buffers, schedule)),
+    arbiter(std::make_shared<mc::MultiMonitorArbiter>(buffers, schedule)),
     size(size),
     pf(pf),
     first_frame_posted(false)
@@ -90,6 +64,8 @@ unsigned int mc::Stream::client_owned_buffer_count(std::lock_guard<decltype(mute
 
 void mc::Stream::submit_buffer(std::shared_ptr<mg::Buffer> const& buffer)
 {
+    std::future<void> deferred_io;
+
     if (!buffer)
         BOOST_THROW_EXCEPTION(std::invalid_argument("cannot submit null buffer"));
 
@@ -97,11 +73,18 @@ void mc::Stream::submit_buffer(std::shared_ptr<mg::Buffer> const& buffer)
         std::lock_guard<decltype(mutex)> lk(mutex); 
         first_frame_posted = true;
         buffers->receive_buffer(buffer->id());
-        schedule->schedule((*buffers)[buffer->id()]);
-        if (!associated_buffers.empty() && (client_owned_buffer_count(lk) == 0))
-            drop_policy->swap_now_blocking();
+        deferred_io = schedule->schedule_nonblocking(buffers->get(buffer->id()));
+        pf = buffer->pixel_format();
     }
     observers.frame_posted(1, buffer->size());
+
+    // Ensure that mutex is not locked while we do this (synchronous!) socket
+    // IO. Holding it locked blocks the compositor thread(s) from rendering.
+    if (deferred_io.valid())
+    {
+        // TODO: Throttling of GPU hogs goes here (LP: #1211700, LP: #1665802)
+        deferred_io.wait();
+    }
 }
 
 void mc::Stream::with_most_recent_buffer_do(std::function<void(mg::Buffer&)> const& fn)
@@ -113,6 +96,7 @@ void mc::Stream::with_most_recent_buffer_do(std::function<void(mg::Buffer&)> con
 
 MirPixelFormat mc::Stream::pixel_format() const
 {
+    std::lock_guard<decltype(mutex)> lk(mutex);
     return pf;
 }
 
@@ -129,10 +113,6 @@ void mc::Stream::remove_observer(std::weak_ptr<ms::SurfaceObserver> const& obser
 
 std::shared_ptr<mg::Buffer> mc::Stream::lock_compositor_buffer(void const* id)
 {
-    {
-        std::lock_guard<decltype(mutex)> lk(mutex);
-        drop_policy->swap_unblocked();
-    }
     return std::make_shared<mc::TemporaryCompositorBuffer>(arbiter, id);
 }
 
@@ -179,11 +159,6 @@ void mc::Stream::transition_schedule(
         new_schedule->schedule(buffer);
     schedule = new_schedule;
     arbiter->set_schedule(schedule);
-}
-
-void mc::Stream::drop_outstanding_requests()
-{
-    //we dont block any requests in this system, nothing to force
 }
 
 int mc::Stream::buffers_ready_for_compositor(void const* id) const
@@ -237,8 +212,17 @@ void mc::Stream::set_scale(float)
 {
 }
 
-void mc::Stream::drop_frame()
+bool mc::Stream::suitable_for_cursor() const
 {
-    if (schedule->num_scheduled() > 1)
-        buffers->send_buffer(schedule->next_buffer()->id());
+    if (associated_buffers.empty())
+    {
+        return true;
+    }
+    else
+    {
+        for (auto it : associated_buffers)
+            if (buffers->get(it)->pixel_format() != mir_pixel_format_argb_8888)
+                return false;
+    }
+    return true;
 }

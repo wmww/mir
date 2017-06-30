@@ -21,8 +21,9 @@
 
 #include "mir/graphics/buffer.h"
 #include "mir/graphics/display.h"
+#include "mir/graphics/transformation.h"
 #include "mir/renderer/gl/context.h"
-#include "mir/renderer/gl/texture_source.h"
+#include "mir/renderer/gl/texture_target.h"
 #include "mir/renderer/gl/context_source.h"
 #include "mir/raii.h"
 
@@ -35,11 +36,11 @@ namespace geom = mir::geometry;
 
 namespace
 {
-auto as_texture_source(mg::Buffer* buffer)
+auto as_texture_target(mg::Buffer* buffer)
 {
-    auto tex = dynamic_cast<mrgl::TextureSource*>(buffer->native_buffer_base());
+    auto tex = dynamic_cast<mrgl::TextureTarget*>(buffer->native_buffer_base());
     if (!tex)
-        BOOST_THROW_EXCEPTION(std::logic_error("Buffer does not support GL rendering"));
+        BOOST_THROW_EXCEPTION(std::invalid_argument("Buffer does not support being rendered to as a GL target"));
     return tex;
 }
 
@@ -68,9 +69,11 @@ mc::ScreencastDisplayBuffer::ScreencastDisplayBuffer(
     Schedule& ready_queue,
     mg::Display& display)
     : gl_context(as_context_source(&display)->create_gl_context()),
-      rect(rect), mirror_mode_(mirror_mode),
+      rect(rect),
+      transform(mg::transformation(mirror_mode)),
       free_queue(free_queue), ready_queue(ready_queue),
-      old_fbo(), old_viewport()
+      old_fbo(), old_viewport(),
+      current_size(size)
 {
     auto const gl_context_raii = mir::raii::paired_calls(
         [this] { gl_context->make_current(); },
@@ -132,9 +135,9 @@ void mc::ScreencastDisplayBuffer::bind()
     if (!current_buffer)
         current_buffer = free_queue.next_buffer();
 
-    auto texture_source = as_texture_source(current_buffer.get());
+    auto texture_target = as_texture_target(current_buffer.get());
     glBindTexture(GL_TEXTURE_2D, color_tex);
-    texture_source->bind();
+    texture_target->bind_for_write();
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
                            GL_TEXTURE_2D, color_tex, 0);
 
@@ -171,17 +174,40 @@ void mc::ScreencastDisplayBuffer::swap_buffers()
     }
 }
 
-MirOrientation mc::ScreencastDisplayBuffer::orientation() const
+glm::mat2 mc::ScreencastDisplayBuffer::transformation() const
 {
-    return mir_orientation_normal;
-}
-
-MirMirrorMode mc::ScreencastDisplayBuffer::mirror_mode() const
-{
-    return mirror_mode_;
+    return transform;
 }
 
 mg::NativeDisplayBuffer* mc::ScreencastDisplayBuffer::native_display_buffer()
 {
     return this;
+}
+
+geom::Size mc::ScreencastDisplayBuffer::renderbuffer_size()
+{
+    return current_size;
+}
+
+void mc::ScreencastDisplayBuffer::set_renderbuffer_size(geom::Size size)
+{
+    if (size == current_size)
+        return;
+
+    auto depth_buffer = allocate_gl_resource<glGenRenderbuffers, glDeleteRenderbuffers>();
+    glBindRenderbuffer(GL_RENDERBUFFER, depth_buffer);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16,
+                          size.width.as_uint32_t(),
+                          size.height.as_uint32_t());
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+                              GL_RENDERBUFFER, depth_buffer);
+
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+        BOOST_THROW_EXCEPTION(std::runtime_error("Failed to create FBO for buffer"));
+    depth_rbo =  std::move(depth_buffer);
+}
+
+void mc::ScreencastDisplayBuffer::set_transformation(glm::mat2 const& t)
+{
+    transform = t;
 }

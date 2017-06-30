@@ -21,7 +21,8 @@
 
 #include "mir_toolkit/client_types.h"
 #include "mir_toolkit/mir_native_buffer.h"
-#include "mir/graphics/nested_context.h"
+#include "mir/graphics/platform.h"
+#include "mir/graphics/platform_authentication.h"
 #include "mir/graphics/buffer_properties.h"
 #include "mir/geometry/rectangle.h"
 #include "mir/geometry/displacement.h"
@@ -49,7 +50,8 @@ class HostSurface;
 class HostChain;
 class HostSurfaceSpec;
 class NativeBuffer;
-class HostConnection : public NestedContext
+class HostConnection : public NativeDisplayPlatform,
+                       public PlatformAuthentication
 {
 public:
     virtual ~HostConnection() = default;
@@ -79,7 +81,8 @@ public:
     virtual std::shared_ptr<NativeBuffer> create_buffer(mir::geometry::Size, MirPixelFormat format) = 0;
     virtual std::shared_ptr<NativeBuffer> create_buffer(geometry::Size, uint32_t format, uint32_t flags) = 0;
     virtual bool supports_passthrough(graphics::BufferUsage) = 0;
-
+    virtual void apply_input_configuration(MirInputConfig const* config) = 0;
+    virtual std::vector<ExtensionDescription> extensions() const = 0;
 protected:
     HostConnection() = default;
     HostConnection(HostConnection const&) = delete;

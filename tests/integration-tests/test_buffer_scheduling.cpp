@@ -30,7 +30,6 @@
 #include "mir/test/doubles/stub_client_buffer_factory.h"
 #include "mir/test/doubles/mock_client_buffer_factory.h"
 #include "mir/test/doubles/stub_buffer_allocator.h"
-#include "mir/test/doubles/mock_frame_dropping_policy_factory.h"
 #include "mir/test/fake_shared.h"
 #include "mir_protobuf.pb.h"
 #include <gtest/gtest.h>
@@ -336,7 +335,7 @@ struct ScheduledProducer : ProducerSystem
     }
     ~ScheduledProducer()
     {
-        ipc->on_client_bound_transfer([this](mp::BufferRequest&){});
+        ipc->on_client_bound_transfer([](mp::BufferRequest&){});
     }
 
     bool can_produce()
@@ -473,7 +472,6 @@ struct BufferScheduling : public Test, ::testing::WithParamInterface<int>
         sink = std::make_shared<StubEventSink>(ipc);
         map = std::make_shared<mc::BufferMap>(sink);
         auto submit_stream = std::make_shared<mc::Stream>(
-            drop_policy,
             map,
             geom::Size{100,100},
             mir_pixel_format_abgr_8888);
@@ -485,7 +483,7 @@ struct BufferScheduling : public Test, ::testing::WithParamInterface<int>
                 if (!submit_stream)
                     return;
                 mg::BufferID id{static_cast<unsigned int>(buffer.buffer_id())};
-                submit_stream->submit_buffer((*map)[id]);
+                submit_stream->submit_buffer(map->get(id));
             });
         ipc->on_allocate(
             [this](geom::Size sz)
@@ -519,7 +517,6 @@ struct BufferScheduling : public Test, ::testing::WithParamInterface<int>
         consumer->set_framedropping(false);
     }
 
-    mtd::MockFrameDroppingPolicyFactory drop_policy;
     mtd::MockClientBufferFactory client_buffer_factory;
     mtd::StubBufferAllocator server_buffer_factory;
     mg::BufferProperties properties{geom::Size{3,3}, mir_pixel_format_abgr_8888, mg::BufferUsage::hardware};
@@ -805,36 +802,6 @@ TEST_P(WithAnyNumberOfBuffers, compositor_acquires_resized_frames)
     }
 }
 
-// Regression test for LP: #1396006
-TEST_P(WithTwoOrMoreBuffers, framedropping_policy_never_drops_newest_frame)
-{
-    for(auto i = 0; i < nbuffers; i++)
-        producer->produce();
-    drop_policy.trigger_policies();
-    producer->produce();
-
-    auto production_log = producer->production_log();
-    ASSERT_THAT(production_log, SizeIs(nbuffers + 1));
-    EXPECT_THAT(production_log[nbuffers], Not(Eq(production_log[nbuffers - 1]))); 
-}
-
-//TODO: (kdub) switch this test back to 2 buffers when we have timeout framedropping for NBS and nbuffers == 2 
-TEST_P(WithThreeOrMoreBuffers, client_is_unblocked_after_policy_is_triggered)
-{
-    producer->produce();
-    consumer->consume();
-
-    for(auto i = 0; i < nbuffers; i++)
-        producer->produce();
-    drop_policy.trigger_policies();
-    producer->produce();
-
-    auto production_log = producer->production_log();
-    ASSERT_THAT(production_log, SizeIs(nbuffers + 2));
-    EXPECT_THAT(production_log[nbuffers].blockage, Eq(Access::blocked));
-    EXPECT_THAT(production_log[nbuffers + 1].blockage, Eq(Access::unblocked));
-}
-
 TEST_P(WithTwoOrMoreBuffers, client_is_not_woken_by_compositor_release)
 {
     // If early release is accidentally active, make sure we see it. But it
@@ -855,8 +822,6 @@ TEST_P(WithTwoOrMoreBuffers, client_is_not_woken_by_compositor_release)
     ASSERT_FALSE(producer->can_produce());
 
     onscreen.reset();
-    // single_monitor_fast -> can produce here
-    // multi_monitor_sync -> can't produce here
     ASSERT_FALSE(producer->can_produce());
 }
 

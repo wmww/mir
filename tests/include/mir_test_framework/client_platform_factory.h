@@ -21,7 +21,7 @@
 
 
 #include "mir/shared_library.h"
-#include "mir/client_platform_factory.h"
+#include "mir/client/client_platform_factory.h"
 #include "mir_test_framework/executable_path.h"
 #include "mir/test/doubles/mock_client_context.h"
 
@@ -45,18 +45,6 @@ std::shared_ptr<mir::client::ClientPlatform> wrap_in_platform_library_cleanup(
         }
     };
 }
-}
-
-std::shared_ptr<mir::client::ClientPlatform> create_android_client_platform()
-{
-    using namespace testing;
-    mtd::MockClientContext ctx;
-    ON_CALL(ctx, populate_server_package(_))
-        .WillByDefault(Invoke([](MirPlatformPackage& package) { ::memset(&package, 0, sizeof(package)); }));
-    platform_library = std::make_shared<mir::SharedLibrary>(client_platform("android"));
-    auto platform_factory = platform_library->load_function<mir::client::CreateClientPlatform>("create_client_platform");
-
-    return wrap_in_platform_library_cleanup(platform_factory(&ctx, nullptr));
 }
 
 std::shared_ptr<mir::client::ClientPlatform> create_mesa_client_platform(

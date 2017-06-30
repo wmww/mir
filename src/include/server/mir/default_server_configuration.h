@@ -19,6 +19,7 @@
 #define MIR_DEFAULT_SERVER_CONFIGURATION_H_
 
 #include "mir/cached_ptr.h"
+#include "mir/extension_description.h"
 #include "mir/server_configuration.h"
 #include "mir/shell/window_manager_builder.h"
 
@@ -53,7 +54,6 @@ class Drawer;
 class DisplayBufferCompositorFactory;
 class Compositor;
 class CompositorReport;
-class FrameDroppingPolicyFactory;
 }
 namespace frontend
 {
@@ -68,6 +68,7 @@ class SessionAuthorizer;
 class EventSink;
 class DisplayChanger;
 class Screencast;
+class InputConfigurationChanger;
 }
 
 namespace shell
@@ -135,11 +136,8 @@ class InputDeviceHub;
 class DefaultInputDeviceHub;
 class CompositeEventFilter;
 class EventFilterChainDispatcher;
-class InputChannelFactory;
 class CursorListener;
 class TouchVisualizer;
-class InputRegion;
-class InputSender;
 class CursorImages;
 class Seat;
 class KeyMapper;
@@ -241,7 +239,6 @@ public:
      *  @{ */
     virtual std::shared_ptr<graphics::GraphicBufferAllocator> the_buffer_allocator();
     virtual std::shared_ptr<compositor::Scene>                  the_scene();
-    virtual std::shared_ptr<compositor::FrameDroppingPolicyFactory> the_frame_dropping_policy_factory();
     /** @} */
 
     /** @name frontend configuration - dependencies
@@ -256,6 +253,7 @@ public:
     std::shared_ptr<frontend::Shell>                          the_frontend_shell();
     virtual std::shared_ptr<frontend::EventSink>              the_global_event_sink();
     virtual std::shared_ptr<frontend::DisplayChanger>         the_frontend_display_changer();
+    virtual std::shared_ptr<frontend::InputConfigurationChanger> the_input_configuration_changer();
     virtual std::shared_ptr<frontend::Screencast>             the_screencast();
     /** @name frontend configuration - internal dependencies
      * internal dependencies of frontend
@@ -324,8 +322,6 @@ public:
     virtual std::shared_ptr<input::Scene>  the_input_scene();
     virtual std::shared_ptr<input::CursorListener> the_cursor_listener();
     virtual std::shared_ptr<input::TouchVisualizer> the_touch_visualizer();
-    virtual std::shared_ptr<input::InputRegion>    the_input_region();
-    virtual std::shared_ptr<input::InputSender>    the_input_sender();
     virtual std::shared_ptr<input::Seat> the_seat();
     virtual std::shared_ptr<input::KeyMapper> the_key_mapper();
 
@@ -360,7 +356,6 @@ protected:
     std::shared_ptr<input::SeatObserver> the_seat_observer();
     std::shared_ptr<frontend::SessionMediatorObserver> the_session_mediator_observer();
 
-    virtual std::shared_ptr<input::InputChannelFactory> the_input_channel_factory();
     virtual std::shared_ptr<scene::MediatingDisplayChanger> the_mediating_display_changer();
     virtual std::shared_ptr<frontend::ProtobufIpcFactory> new_ipc_factory(
         std::shared_ptr<frontend::SessionAuthorizer> const& session_authorizer);
@@ -388,10 +383,9 @@ protected:
     CachedPtr<input::InputManager>    input_manager;
     CachedPtr<input::SurfaceInputDispatcher>    surface_input_dispatcher;
     CachedPtr<input::DefaultInputDeviceHub>    default_input_device_hub;
+    CachedPtr<input::InputDeviceHub>    input_device_hub;
     CachedPtr<dispatch::MultiplexingDispatchable> input_reading_multiplexer;
     CachedPtr<input::InputDispatcher> input_dispatcher;
-    CachedPtr<input::InputSender>     input_sender;
-    CachedPtr<input::InputRegion>     input_region;
     CachedPtr<shell::InputTargeter> input_targeter;
     CachedPtr<input::CursorListener> cursor_listener;
     CachedPtr<input::TouchVisualizer> touch_visualizer;
@@ -410,9 +404,9 @@ protected:
     CachedPtr<frontend::ConnectionCreator> connection_creator;
     CachedPtr<frontend::ConnectionCreator> prompt_connection_creator;
     CachedPtr<frontend::Screencast> screencast;
+    CachedPtr<frontend::InputConfigurationChanger> input_configuration_changer;
     CachedPtr<renderer::RendererFactory> renderer_factory;
     CachedPtr<compositor::BufferStreamFactory> buffer_stream_factory;
-    CachedPtr<compositor::FrameDroppingPolicyFactory> frame_dropping_policy_factory;
     CachedPtr<scene::SurfaceStack> scene_surface_stack;
     CachedPtr<shell::SurfaceStack> surface_stack;
     CachedPtr<scene::SceneReport> scene_report;
@@ -472,6 +466,7 @@ private:
     auto initialise_reports() -> std::shared_ptr<report::Reports>;
 
     CachedPtr<shell::detail::FrontendShell> frontend_shell;
+    std::vector<mir::ExtensionDescription> the_extensions();
 };
 }
 

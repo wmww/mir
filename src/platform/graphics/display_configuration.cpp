@@ -18,6 +18,7 @@
 
 #include "mir/graphics/display_configuration.h"
 #include "mir/output_type_names.h"
+#include "mir/graphics/transformation.h"
 
 #include <ostream>
 #include <algorithm>
@@ -118,6 +119,19 @@ std::ostream& mg::operator<<(std::ostream& out, mg::DisplayConfigurationOutput c
 
     out << "\tscale: " << val.scale << std::endl;
     out << "\tform factor: " << as_string(val.form_factor) << std::endl;
+
+    out << "\tcustom logical size: ";
+    if (val.custom_logical_size.is_set())
+    {
+        auto const& size = val.custom_logical_size.value();
+        out << size.width.as_int() << "x" << size.height.as_int();
+    }
+    else
+    {
+        out << "not set";
+    }
+    out << std::endl;
+
     out << "\torientation: " << val.orientation << '\n';
     out << "}" << std::endl;
 
@@ -172,6 +186,7 @@ bool mg::operator==(mg::DisplayConfigurationOutput const& val1,
                (val1.orientation == val2.orientation) &&
                (val1.current_mode_index == val2.current_mode_index) &&
                (val1.modes.size() == val2.modes.size()) &&
+               (val1.custom_logical_size == val2.custom_logical_size) &&
                (val1.scale == val2.scale) &&
                (val1.form_factor == val2.form_factor)};
 
@@ -243,7 +258,14 @@ mir::geometry::Rectangle extents_of(
 
 mir::geometry::Rectangle mg::DisplayConfigurationOutput::extents() const
 {
-    return extents_of(modes, current_mode_index, orientation, top_left);
+    return custom_logical_size.is_set() ?
+           mir::geometry::Rectangle(top_left, custom_logical_size.value()) :
+           extents_of(modes, current_mode_index, orientation, top_left);
+}
+
+glm::mat2 mg::DisplayConfigurationOutput::transformation() const
+{
+    return mg::transformation(orientation);
 }
 
 bool mg::DisplayConfigurationOutput::valid() const
@@ -256,9 +278,15 @@ bool mg::DisplayConfigurationOutput::valid() const
     if (f == pixel_formats.end())
         return false;
 
-    auto nmodes = modes.size();
-    if (current_mode_index >= nmodes)
+    if (used && current_mode_index >= modes.size())
         return false;
+
+    if (custom_logical_size.is_set())
+    {
+        auto const& logical_size = custom_logical_size.value();
+        if (!logical_size.width.as_int() || !logical_size.height.as_int())
+            return false;
+    }
 
     return true;
 }
@@ -297,13 +325,16 @@ mg::UserDisplayConfigurationOutput::UserDisplayConfigurationOutput(
         subpixel_arrangement(master.subpixel_arrangement),
         gamma(master.gamma),
         gamma_supported(master.gamma_supported),
-        edid(*reinterpret_cast<std::vector<uint8_t const>*>(&master.edid))
+        edid(*reinterpret_cast<std::vector<uint8_t const>*>(&master.edid)),
+        custom_logical_size(master.custom_logical_size)
 {
 }
 
 mir::geometry::Rectangle mg::UserDisplayConfigurationOutput::extents() const
 {
-    return extents_of(modes, current_mode_index, orientation, top_left);
+    return custom_logical_size.is_set() ?
+           mir::geometry::Rectangle(top_left, custom_logical_size.value()) :
+           extents_of(modes, current_mode_index, orientation, top_left);
 }
 
 

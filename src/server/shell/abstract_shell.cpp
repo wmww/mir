@@ -137,7 +137,7 @@ mf::SurfaceId msh::AbstractShell::create_surface(
     ms::SurfaceCreationParameters const& params,
     std::shared_ptr<mf::EventSink> const& sink)
 {
-    auto const build = [this, sink](std::shared_ptr<ms::Session> const& session, ms::SurfaceCreationParameters const& placed_params)
+    auto const build = [sink](std::shared_ptr<ms::Session> const& session, ms::SurfaceCreationParameters const& placed_params)
         {
             return session->create_surface(placed_params, sink);
         };
@@ -163,7 +163,14 @@ void msh::AbstractShell::modify_surface(std::shared_ptr<scene::Session> const& s
 
     if (modifications.cursor_image.is_set())
     {
-        surface->set_cursor_image(modifications.cursor_image.value());
+        if (modifications.cursor_image.value() == nullptr)
+        {
+            surface->set_cursor_image({});
+        }
+        else
+        {
+            surface->set_cursor_image(modifications.cursor_image.value());
+        }
     }
 
     if (modifications.stream_cursor.is_set())
@@ -249,6 +256,22 @@ void msh::AbstractShell::raise_surface(
     uint64_t timestamp)
 {
     window_manager->handle_raise_surface(session, surface, timestamp);
+}
+
+void msh::AbstractShell::request_drag_and_drop(
+    std::shared_ptr<scene::Session> const& session,
+    std::shared_ptr<scene::Surface> const& surface,
+    uint64_t timestamp)
+{
+    window_manager->handle_request_drag_and_drop(session, surface, timestamp);
+}
+
+void msh::AbstractShell::request_move(
+    std::shared_ptr<scene::Session> const& session,
+    std::shared_ptr<scene::Surface> const& surface,
+    uint64_t timestamp)
+{
+    window_manager->handle_request_move(session, surface, timestamp);
 }
 
 void msh::AbstractShell::focus_next_session()
@@ -401,3 +424,12 @@ void msh::AbstractShell::raise(SurfaceSet const& surfaces)
     report->surfaces_raised(surfaces);
 }
 
+void msh::AbstractShell::set_drag_and_drop_handle(std::vector<uint8_t> const& handle)
+{
+    input_targeter->set_drag_and_drop_handle(handle);
+}
+
+void msh::AbstractShell::clear_drag_and_drop_handle()
+{
+    input_targeter->clear_drag_and_drop_handle();
+}

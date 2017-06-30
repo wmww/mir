@@ -38,14 +38,8 @@ namespace mg = mir::graphics;
 namespace mo = mir::options;
 namespace mge = mir::graphics::eglstream;
 
-mir::UniqueModulePtr<mg::Platform> create_host_platform(
-    std::shared_ptr<mo::Option> const&,
-    std::shared_ptr<mir::EmergencyCleanupRegistry> const& emergency_cleanup_registry,
-    std::shared_ptr<mg::DisplayReport> const& report,
-    std::shared_ptr<mir::logging::Logger> const& /*logger*/)
+EGLDeviceEXT find_device()
 {
-    mir::assert_entry_point_signature<mg::CreateHostPlatform>(&create_host_platform);
-
     int device_count{0};
     if (eglQueryDevicesEXT(0, nullptr, &device_count) != EGL_TRUE)
     {
@@ -73,13 +67,55 @@ mir::UniqueModulePtr<mg::Platform> create_host_platform(
     {
         BOOST_THROW_EXCEPTION(std::runtime_error("Couldn't find EGLDeviceEXT supporting EGL_EXT_device_drm?"));
     }
+    return *device;
+}
 
-    return mir::make_module_ptr<mge::Platform>(*device, emergency_cleanup_registry, report);
+mir::UniqueModulePtr<mg::Platform> create_host_platform(
+    std::shared_ptr<mo::Option> const&,
+    std::shared_ptr<mir::EmergencyCleanupRegistry> const&, 
+    std::shared_ptr<mg::DisplayReport> const&, 
+    std::shared_ptr<mir::logging::Logger> const&)
+{
+    mir::assert_entry_point_signature<mg::CreateHostPlatform>(&create_host_platform);
+    return mir::make_module_ptr<mge::Platform>(
+        std::make_shared<mge::RenderingPlatform>(),
+        std::make_shared<mge::DisplayPlatform>(find_device()));
+}
+
+mir::UniqueModulePtr<mg::DisplayPlatform> create_display_platform(
+    std::shared_ptr<mo::Option> const&, 
+    std::shared_ptr<mir::EmergencyCleanupRegistry> const&,
+    std::shared_ptr<mg::DisplayReport> const&, 
+    std::shared_ptr<mir::logging::Logger> const&) 
+{
+    mir::assert_entry_point_signature<mg::CreateDisplayPlatform>(&create_display_platform);
+    return mir::make_module_ptr<mge::DisplayPlatform>(find_device());
+}
+
+mir::UniqueModulePtr<mg::RenderingPlatform> create_rendering_platform(
+    std::shared_ptr<mir::options::Option> const&,
+    std::shared_ptr<mg::PlatformAuthentication> const&)
+{
+    mir::assert_entry_point_signature<mg::CreateRenderingPlatform>(&create_rendering_platform);
+    return mir::make_module_ptr<mge::RenderingPlatform>();
 }
 
 void add_graphics_platform_options(boost::program_options::options_description& /*config*/)
 {
     mir::assert_entry_point_signature<mg::AddPlatformOptions>(&add_graphics_platform_options);
+}
+
+namespace
+{
+char const* drm_node_for_device(EGLDeviceEXT device)
+{
+    auto const device_path = eglQueryDeviceStringEXT(device, EGL_DRM_DEVICE_FILE_EXT);
+    if (!device_path)
+    {
+        BOOST_THROW_EXCEPTION(mg::egl_error("Failed to determine DRM device node path from EGLDevice"));
+    }
+    return device_path;
+}
 }
 
 mg::PlatformPriority probe_graphics_platform(mo::ProgramOption const& /*options*/)
@@ -135,7 +171,22 @@ mg::PlatformPriority probe_graphics_platform(mo::ProgramOption const& /*options*
             {
                 mir::log_debug("Found EGLDeviceEXT with device extensions: %s",
                                device_extensions);
-                return strstr(device_extensions, "EGL_EXT_device_drm") != NULL;
+                // TODO: This test is not strictly correct (will incorrectly match
+                // EGL_EXT_device_drmish_but_not_drm)
+                if (strstr(device_extensions, "EGL_EXT_device_drm") != NULL)
+                {
+                    // Check if we can acquire DRM master
+                    int const drm_fd = open(drm_node_for_device(device), O_RDWR | O_CLOEXEC);
+                    if (drmSetMaster(drm_fd))
+                    {
+                        mir::log_debug(
+                            "EGL_EXT_device_drm found, but can't acquire DRM master.");
+                        return false;
+                    }
+                    drmDropMaster(drm_fd);
+                    return true;
+                }
+                return false;
             }
             else
             {
@@ -144,8 +195,8 @@ mg::PlatformPriority probe_graphics_platform(mo::ProgramOption const& /*options*
             }
         }))
     {
-        mir::log_debug("EGLDeviceEXTs found, but none support required "
-                       "EGL_EXT_device_drm extension");
+        mir::log_debug(
+            "EGLDeviceEXTs found, but none are suitable for Mir");
         return mg::PlatformPriority::unsupported;
     }
 
@@ -169,10 +220,3 @@ mir::ModuleProperties const* describe_graphics_module()
     return &description;
 }
 
-mir::UniqueModulePtr<mg::Platform> create_guest_platform(
-    std::shared_ptr<mg::DisplayReport> const&,
-    std::shared_ptr<mg::NestedContext> const& /*nested_context*/)
-{
-    mir::assert_entry_point_signature<mg::CreateGuestPlatform>(&create_guest_platform);
-    return nullptr;
-}

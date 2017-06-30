@@ -36,14 +36,10 @@ namespace frontend { class ClientBuffers; }
 namespace compositor
 {
 class Schedule;
-class FrameDroppingPolicyFactory;
-class FrameDroppingPolicy;
 class Stream : public BufferStream
 {
 public:
-    Stream(
-        FrameDroppingPolicyFactory const& policy_factory,
-        std::shared_ptr<frontend::ClientBuffers>, geometry::Size sz, MirPixelFormat format);
+    Stream(std::shared_ptr<frontend::ClientBuffers>, geometry::Size sz, MirPixelFormat format);
     ~Stream();
 
     void submit_buffer(std::shared_ptr<graphics::Buffer> const& buffer) override;
@@ -57,36 +53,25 @@ public:
     void resize(geometry::Size const& size) override;
     void allow_framedropping(bool) override;
     bool framedropping() const override;
-    void drop_outstanding_requests() override;
     int buffers_ready_for_compositor(void const* user_id) const override;
     void drop_old_buffers() override;
     bool has_submitted_buffer() const override;
     void associate_buffer(graphics::BufferID) override;
     void disassociate_buffer(graphics::BufferID) override;
     void set_scale(float scale) override;
+    bool suitable_for_cursor() const override;
 
 private:
     enum class ScheduleMode;
-    struct DroppingCallback : mir::LockableCallback
-    {
-        DroppingCallback(Stream* stream);
-        void operator()() override;
-        void lock() override;
-        void unlock() override;
-        Stream* stream;
-        std::unique_lock<std::mutex> guard_lock;
-    };
     void transition_schedule(std::shared_ptr<Schedule>&& new_schedule, std::lock_guard<std::mutex> const&);
-    void drop_frame();
 
     std::mutex mutable mutex;
-    std::unique_ptr<compositor::FrameDroppingPolicy> drop_policy;
     ScheduleMode schedule_mode;
     std::shared_ptr<Schedule> schedule;
-    std::shared_ptr<frontend::ClientBuffers> buffers;
+    std::shared_ptr<frontend::ClientBuffers> const buffers;
     std::shared_ptr<MultiMonitorArbiter> const arbiter;
     geometry::Size size; 
-    MirPixelFormat const pf;
+    MirPixelFormat pf;
     bool first_frame_posted;
 
     scene::SurfaceObservers observers;

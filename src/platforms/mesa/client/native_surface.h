@@ -20,7 +20,7 @@
 #define MIR_CLIENT_MESA_NATIVE_SURFACES_H_
 
 #include "mir_toolkit/mesa/native_display.h"
-#include "mir/egl_native_surface.h"
+#include "mir/client/egl_native_surface.h"
 
 namespace mir
 {
@@ -35,7 +35,10 @@ public:
     explicit NativeSurface(EGLNativeSurface*);
 
     int advance_buffer(MirBufferPackage* buffer_package);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     int get_parameters(MirWindowParameters* surface_parameters);
+#pragma GCC diagnostic pop
     int set_swapinterval(int interval);
     void use_native_surface(EGLNativeSurface* native_surface);
 

@@ -22,11 +22,10 @@
 #include "presentation_chain.h"
 #include "mir_connection.h"
 #include "buffer.h"
-#include "mir/client_buffer.h"
+#include "mir/client/client_buffer.h"
 #include "mir/require.h"
 #include "mir/uncaught.h"
 #include "mir/require.h"
-#include "mir/client_buffer.h"
 #include <stdexcept>
 #include <boost/throw_exception.hpp>
 
@@ -129,11 +128,11 @@ catch (std::exception const& ex)
     MIR_LOG_UNCAUGHT_EXCEPTION(ex);
 }
 
-unsigned int mir_buffer_get_width(MirBuffer* b)
+unsigned int mir_buffer_get_width(MirBuffer const* b)
 try
 {
     mir::require(b);
-    auto buffer = reinterpret_cast<mcl::MirBuffer*>(b);
+    auto const buffer = reinterpret_cast<mcl::MirBuffer const*>(b);
     return buffer->size().width.as_uint32_t();
 }
 catch (std::exception const& ex)
@@ -142,11 +141,11 @@ catch (std::exception const& ex)
     return 0;
 }
 
-unsigned int mir_buffer_get_height(MirBuffer* b)
+unsigned int mir_buffer_get_height(MirBuffer const* b)
 try
 {
     mir::require(b);
-    auto buffer = reinterpret_cast<mcl::MirBuffer*>(b);
+    auto const buffer = reinterpret_cast<mcl::MirBuffer const*>(b);
     return buffer->size().height.as_uint32_t();
 }
 catch (std::exception const& ex)
@@ -155,11 +154,11 @@ catch (std::exception const& ex)
     return 0;
 }
 
-MirPixelFormat mir_buffer_get_pixel_format(MirBuffer* b)
+MirPixelFormat mir_buffer_get_pixel_format(MirBuffer const* b)
 try
 {
     mir::require(b);
-    auto buffer = reinterpret_cast<mcl::MirBuffer*>(b);
+    auto const buffer = reinterpret_cast<mcl::MirBuffer const*>(b);
     return buffer->pixel_format();
 }
 catch (std::exception const& ex)
@@ -168,10 +167,10 @@ catch (std::exception const& ex)
     return mir_pixel_format_invalid;
 }
 
-bool mir_buffer_is_valid(MirBuffer* b)
+bool mir_buffer_is_valid(MirBuffer const* b)
 try
 {
-    auto buffer = reinterpret_cast<mcl::MirBuffer*>(b);
+    auto const buffer = reinterpret_cast<mcl::MirBuffer const*>(b);
     return buffer->valid();
 }
 catch (std::exception const& ex)
@@ -180,10 +179,10 @@ catch (std::exception const& ex)
     return false;
 }
 
-char const *mir_buffer_get_error_message(MirBuffer* b)
+char const *mir_buffer_get_error_message(MirBuffer const* b)
 try
 {
-    auto buffer = reinterpret_cast<mcl::MirBuffer*>(b);
+    auto const buffer = reinterpret_cast<mcl::MirBuffer const*>(b);
     return buffer->error_message();
 }
 catch (std::exception const& ex)
