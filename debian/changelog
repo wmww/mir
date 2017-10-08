@@ -56,8 +56,9 @@ mir (1.0.0-0ubuntu1) UNRELEASED; urgency=medium
 
  -- Alan Griffiths <alan.griffiths@canonical.com>  Thu, 10 Aug 2017 11:54:30 +0000
 
-mir (0.27.0-0ubuntu1) UNRELEASED; urgency=medium
+mir (0.27.0+17.10.20170630-0ubuntu1) artful; urgency=medium
 
+  [ Daniel van Vugt ]
   * New upstream release 0.27.0 (https://launchpad.net/mir/+milestone/0.27.0)
     - ABI summary:
       . mirclient ABI unchanged at 9
@@ -203,7 +204,7 @@ mir (0.27.0-0ubuntu1) UNRELEASED; urgency=medium
       . Correct eglsquare example: Don't paint from the window event handler.
         (LP: #1695221)
 
- -- Daniel van Vugt <daniel.van.vugt@canonical.com>  Mon, 03 Apr 2017 11:28:15 +0800
+ -- Alan Griffiths <alan.griffiths@canonical.com>  Fri, 30 Jun 2017 12:00:38 +0000
 
 mir (0.26.3+17.10.20170526.3-0ubuntu1) artful; urgency=medium
 
