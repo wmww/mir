@@ -2,7 +2,7 @@
  * Copyright © 2016 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License version 3,
+ * under the terms of the GNU Lesser General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -53,7 +53,7 @@ MIR_DEPRECATE_RENDERSURFACES_FOR_RENAME;
  * \param [in] connection                       A valid connection
  * \param [in] width                            The width in pixels
  * \param [in] height                           The height in pixels
- * \param [in] MirRenderSurfaceCallback         Callback to be invoked when the request completes.
+ * \param [in] callback                         Callback to be invoked when the request completes.
  *                                              The callback is guaranteed to be called and called
  *                                              with a non-null MirRenderSurface*, but the render
  *                                              surface may be invalid in case of error.

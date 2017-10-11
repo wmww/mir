@@ -31,6 +31,7 @@ Build-Depends: cmake,
                libudev-dev,
                libgtest-dev,
                google-mock (>= 1.6.0+svn437),
+               libxml++2.6-dev,
 # only enable valgrind once it's been tested to work on each architecture:
                valgrind [amd64 i386 armhf arm64],
                libglib2.0-dev,
@@ -45,6 +46,8 @@ Build-Depends: cmake,
                libcapnp-dev,
                capnproto,
                libepoxy-dev,
+               python3-pil:native,
+               linux-libc-dev,
 Standards-Version: 3.9.4
 Homepage: https://launchpad.net/mir
 # If you aren't a member of ~mir-team but need to upload packaging changes,
@@ -67,7 +70,7 @@ Description: Display server for Ubuntu - RPC definitions
 
 #TODO: Packaging infrastructure for better dependency generation,
 #      ala pkg-xorg's xviddriver:Provides and ABI detection.
-Package: libmirserver44
+Package: libmirserver45
 Section: libs
 Architecture: linux-any
 Multi-Arch: same
@@ -146,7 +149,7 @@ Section: libdevel
 Architecture: linux-any
 Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends}
-Depends: libmirserver44 (= ${binary:Version}),
+Depends: libmirserver45 (= ${binary:Version}),
          libmirplatform-dev (= ${binary:Version}),
          libmircommon-dev (= ${binary:Version}),
          libglm-dev,
@@ -195,6 +198,9 @@ Section: libdevel
 Architecture: linux-any
 Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends}
+Breaks: libmirclientcpp-dev
+Replaces: libmirclientcpp-dev
+Provides: libmirclientcpp-dev (=1.5)
 Depends: libmirclient9 (= ${binary:Version}),
          libmircommon-dev (= ${binary:Version}),
          libmircookie-dev (= ${binary:Version}),
@@ -233,7 +239,7 @@ Architecture: linux-any
 Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends}
 Depends: libmirclient-debug-extension1 (= ${binary:Version}),
-	 ${misc:Depends},
+         ${misc:Depends},
          ${shlibs:Depends},
 Description: Display server for Ubuntu - client debug interface headers
  Mir is a display server running on linux systems, with a focus on efficiency,
@@ -254,9 +260,13 @@ Description: Display server for Ubuntu - client debug interface headers
 
 Package: mir-demos
 Architecture: linux-any
+Breaks: miral-examples
+Replaces: miral-examples
+Provides: miral-examples (=1.5)
 Depends: ${misc:Depends},
          ${shlibs:Depends},
-Recommends: fonts-liberation
+Recommends: dmz-cursor-theme,
+            fonts-liberation
 Description: Display server for Ubuntu - demonstration programs
  Mir is a display server running on linux systems, with a focus on efficiency,
  robust operation and a well-defined driver model.
@@ -477,3 +487,33 @@ Description: Display server for Ubuntu - GL Renderer development files
  .
  Contains header files that define the interfaces through which platforms and
  renderers access the functionality needed to render with GL.
+
+Package: libmiral2
+Section: libs
+Architecture: linux-any
+Multi-Arch: same
+Pre-Depends: ${misc:Pre-Depends}
+Depends: ${misc:Depends},
+         ${shlibs:Depends},
+Description: Display server for Ubuntu - ABI preserving abstraction layer
+ MirAL provides an ABI-stable abstraction layer for Mir based shells,
+ insulating them from mirserver ABI breaks.
+ .
+ Contains the shared library containing MirAL abstraction layer.
+
+Package: libmiral-dev
+Section: libdevel
+Architecture: linux-any
+Multi-Arch: same
+Pre-Depends: ${misc:Pre-Depends}
+Depends: libmiral2 (= ${libmiral2:Version}),
+# ${source:Version} is technically incorrect, but Launchpad doesn't do BinNMUs
+# so it's harmless.
+         libmirclient-dev (= ${source:Version}),
+         ${misc:Depends},
+Description: Developer files for the Mir ABI-stable abstraction layer
+ MirAL provides an ABI-stable abstraction layer for Mir based shells,
+ insulating them from mirserver ABI breaks.
+ .
+ Contains header files required for development using the MirAL abstraction
+ layer.

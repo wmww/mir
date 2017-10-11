@@ -2,7 +2,7 @@
  * Copyright © 2015-2016 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License version 3,
+ * under the terms of the GNU Lesser General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -235,7 +235,7 @@ void mir_keyboard_config_set_keymap_layout(
  * Set the options of the keymap as a null terminated string.
  *
  * \param [in] conf     The keyboard config
- * \param [in] layout   The keymap options
+ * \param [in] options  The keymap options
  */
 void mir_keyboard_config_set_keymap_options(
     MirKeyboardConfig* conf, char const* options);
@@ -244,7 +244,7 @@ void mir_keyboard_config_set_keymap_options(
  * Set the variant of the keymap as a null terminated string.
  *
  * \param [in] conf     The keyboard config
- * \param [in] layout   The keymap variant
+ * \param [in] variant  The keymap variant
  */
 void mir_keyboard_config_set_keymap_variant(
     MirKeyboardConfig* conf, char const* variant);
@@ -549,7 +549,7 @@ void mir_touchpad_config_set_tap_to_click(
  * Configure whether middle mouse button emulation should be enabled
  *
  * \param [in] conf         The touchpad config
- * \param [in] middle_mouse_button_emulation
+ * \param [in] middle_emulation
  */
 void mir_touchpad_config_set_middle_mouse_button_emulation(
     MirTouchpadConfig* conf, bool middle_emulation);

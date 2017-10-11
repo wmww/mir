@@ -2,7 +2,7 @@
  * Copyright © 2014 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 3 as
+ * it under the terms of the GNU General Public License version 2 or 3 as
  * published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -17,7 +17,7 @@
  */
 
 #include "src/platforms/common/server/shm_buffer.h"
-#include "src/platforms/common/server/shm_file.h"
+#include "mir/shm_file.h"
 
 #include "mir/test/doubles/mock_gl.h"
 
@@ -35,7 +35,7 @@ using namespace testing;
 namespace
 {
 
-struct StubShmFile : public mgc::ShmFile
+struct StubShmFile : public mir::ShmFile
 {
     void* base_ptr() const { return fake_mapping; }
     int fd() const { return fake_fd; }
@@ -47,7 +47,7 @@ struct StubShmFile : public mgc::ShmFile
 struct PlatformlessShmBuffer : mgc::ShmBuffer
 {
     PlatformlessShmBuffer(
-        std::unique_ptr<mgc::ShmFile> shm_file,
+        std::unique_ptr<mir::ShmFile> shm_file,
         geom::Size const& size,
         MirPixelFormat const& pixel_format) :
         ShmBuffer(std::move(shm_file), size, pixel_format)

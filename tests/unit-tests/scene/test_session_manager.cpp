@@ -2,7 +2,7 @@
  * Copyright © 2012-2015 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 3 as
+ * it under the terms of the GNU General Public License version 2 or 3 as
  * published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -24,7 +24,7 @@
 
 #include "src/server/scene/basic_surface.h"
 #include "src/server/scene/default_session_container.h"
-#include "src/server/scene/session_event_sink.h"
+#include "src/include/server/mir/scene/session_event_sink.h"
 #include "src/server/report/null_report_factory.h"
 
 #include "mir/test/doubles/mock_surface_stack.h"

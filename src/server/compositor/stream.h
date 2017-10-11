@@ -2,7 +2,7 @@
  * Copyright © 2015 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 3,
+ * under the terms of the GNU General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -39,7 +39,7 @@ class Schedule;
 class Stream : public BufferStream
 {
 public:
-    Stream(std::shared_ptr<frontend::ClientBuffers>, geometry::Size sz, MirPixelFormat format);
+    Stream(geometry::Size sz, MirPixelFormat format);
     ~Stream();
 
     void submit_buffer(std::shared_ptr<graphics::Buffer> const& buffer) override;
@@ -56,10 +56,7 @@ public:
     int buffers_ready_for_compositor(void const* user_id) const override;
     void drop_old_buffers() override;
     bool has_submitted_buffer() const override;
-    void associate_buffer(graphics::BufferID) override;
-    void disassociate_buffer(graphics::BufferID) override;
     void set_scale(float scale) override;
-    bool suitable_for_cursor() const override;
 
 private:
     enum class ScheduleMode;
@@ -68,16 +65,12 @@ private:
     std::mutex mutable mutex;
     ScheduleMode schedule_mode;
     std::shared_ptr<Schedule> schedule;
-    std::shared_ptr<frontend::ClientBuffers> const buffers;
     std::shared_ptr<MultiMonitorArbiter> const arbiter;
     geometry::Size size; 
     MirPixelFormat pf;
     bool first_frame_posted;
 
     scene::SurfaceObservers observers;
-
-    std::set<graphics::BufferID> associated_buffers;
-    unsigned int client_owned_buffer_count(std::lock_guard<decltype(mutex)> const&) const;
 };
 }
 }

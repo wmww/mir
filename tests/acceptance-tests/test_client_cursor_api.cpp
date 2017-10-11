@@ -2,7 +2,7 @@
  * Copyright © 2013-2016 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 3 as
+ * it under the terms of the GNU General Public License version 2 or 3 as
  * published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -456,17 +456,7 @@ struct ClientCursor : mtf::HeadlessInProcessServer
 
         server.override_the_cursor_images([]() { return std::make_shared<NamedCursorImages>(); });
 
-        server.override_the_window_manager_builder([this](msh::FocusController* focus_controller)
-            {
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-                using PlacementWindowManager = msh::WindowManagerConstructor<mtf::DeclarativePlacementWindowManagerPolicy>;
-                return std::make_shared<PlacementWindowManager>(
-                    focus_controller,
-                    client_geometries,
-                    server.the_shell_display_layout());
-#pragma GCC diagnostic pop
-            });
+        override_window_management_policy<mtf::DeclarativePlacementWindowManagerPolicy>(client_geometries);
 
         server.wrap_shell([&, this](auto const& wrapped)
         {

@@ -2,7 +2,7 @@
  * Copyright © 2012 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 3,
+ * under the terms of the GNU General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -157,6 +157,13 @@ public:
     MOCK_METHOD5(eglGetSyncValuesCHROMIUM, EGLBoolean(EGLDisplay, EGLSurface,
                                                       int64_t*, int64_t*,
                                                       int64_t*));
+
+    MOCK_METHOD2(eglBindWaylandDisplayWL,
+        EGLBoolean(EGLDisplay, struct wl_display*));
+    MOCK_METHOD2(eglUnbindWaylandDisplayWL,
+        EGLBoolean(EGLDisplay, struct wl_display*));
+    MOCK_METHOD4(eglQueryWaylandBufferWL,
+        EGLBoolean(EGLDisplay, struct wl_resource*, EGLint, EGLint*));
 
     EGLDisplay const fake_egl_display;
     EGLConfig const* const fake_configs;

@@ -2,7 +2,7 @@
  * Copyright © 2012-2014 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 3,
+ * under the terms of the GNU General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -175,6 +175,7 @@ public:
      * dependencies of DisplayServer on the rest of the Mir
      *  @{ */
     std::shared_ptr<frontend::Connector>    the_connector() override;
+    std::shared_ptr<frontend::Connector>    the_wayland_connector() override;
     std::shared_ptr<frontend::Connector>    the_prompt_connector() override;
     std::shared_ptr<graphics::Display>      the_display() override;
     std::shared_ptr<compositor::Compositor> the_compositor() override;
@@ -375,6 +376,7 @@ protected:
 /** @} */
 
     CachedPtr<frontend::Connector>   connector;
+    CachedPtr<frontend::Connector>   wayland_connector;
     CachedPtr<frontend::Connector>   prompt_connector;
 
     CachedPtr<input::InputReport> input_report;

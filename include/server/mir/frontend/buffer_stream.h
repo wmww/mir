@@ -2,7 +2,7 @@
  * Copyright © 2015 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 3,
+ * under the terms of the GNU General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -21,6 +21,7 @@
 
 #include <mir_toolkit/common.h>
 #include "mir/graphics/buffer_id.h"
+#include "mir/geometry/size.h"
 #include <functional>
 #include <memory>
 
@@ -45,6 +46,7 @@ public:
     virtual ~BufferStream() = default;
     
     virtual void submit_buffer(std::shared_ptr<graphics::Buffer> const& buffer) = 0;
+    virtual void resize(geometry::Size const& size) = 0;
 
     virtual void add_observer(std::shared_ptr<scene::SurfaceObserver> const& observer) = 0;
     virtual void remove_observer(std::weak_ptr<scene::SurfaceObserver> const& observer) = 0;
@@ -54,16 +56,10 @@ public:
 
     virtual MirPixelFormat pixel_format() const = 0;
 
-    //TODO: associate/disassociate_buffer are only used for timeout framedropping policy decisions.
-    //      They will be removed once timeout framedropping policy moves to the client side. 
-    virtual void associate_buffer(graphics::BufferID) = 0;
-    virtual void disassociate_buffer(graphics::BufferID) = 0;
-
     //TODO: framedropping for swapinterval-0 can probably be effectively managed from the client
     //      side once we only support the NBS system.
     virtual void allow_framedropping(bool) = 0;
     virtual void set_scale(float scale) = 0;
-    virtual bool suitable_for_cursor() const = 0;
 protected:
     BufferStream() = default;
     BufferStream(BufferStream const&) = delete;

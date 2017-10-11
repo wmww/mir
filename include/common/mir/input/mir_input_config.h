@@ -2,7 +2,7 @@
  * Copyright © 2016 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License version 3,
+ * under the terms of the GNU Lesser General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -75,7 +75,9 @@ private:
     std::unique_ptr<Implementation> impl;
 };
 
-class MirInputConfig
+// We use "struct", not "class" for consistency with mirclient/mir_toolkit/client_types.h:395
+// (To be nice to downstreams that use clang with its pointless warnings about this.)
+struct MirInputConfig
 {
 public:
     MirInputConfig();

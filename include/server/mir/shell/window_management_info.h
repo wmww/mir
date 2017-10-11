@@ -2,7 +2,7 @@
  * Copyright © 2015-2016 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 3,
+ * under the terms of the GNU General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -28,6 +28,10 @@
 namespace mir
 {
 namespace scene { class Session; class Surface; struct SurfaceCreationParameters; }
+namespace graphics
+{
+class GraphicBufferAllocator;
+}
 namespace shell
 {
 struct SurfaceInfo
@@ -78,7 +82,7 @@ struct SurfaceInfo
     mir::optional_value<graphics::DisplayConfigurationOutputId> output_id;
     mir::optional_value<MirPointerConfinementState> confine_pointer;
 
-    void init_titlebar(std::shared_ptr<scene::Session> const& session, std::shared_ptr<scene::Surface> const& surface);
+    void init_titlebar(graphics::GraphicBufferAllocator& allocator, std::shared_ptr<scene::Surface> const& surface);
     void paint_titlebar(int intensity);
 
 private:

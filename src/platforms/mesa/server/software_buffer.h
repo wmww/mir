@@ -2,7 +2,7 @@
  * Copyright © 2016 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License version 3,
+ * under the terms of the GNU Lesser General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -23,12 +23,10 @@
 
 namespace mir
 {
+class ShmFile;
+
 namespace graphics
 {
-namespace common
-{
-class ShmFile;
-}
 namespace mesa
 {
 
@@ -36,7 +34,7 @@ class SoftwareBuffer: public common::ShmBuffer
 {
 public:
     SoftwareBuffer(
-        std::unique_ptr<common::ShmFile> shm_file,
+        std::unique_ptr<ShmFile> shm_file,
         geometry::Size const& size,
         MirPixelFormat const& pixel_format);
 

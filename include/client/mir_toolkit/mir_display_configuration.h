@@ -2,7 +2,7 @@
  * Copyright © 2016 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License version 3,
+ * under the terms of the GNU Lesser General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -539,7 +539,7 @@ MirFormFactor mir_output_get_form_factor(MirOutput const* output);
  * \param [in]  output  The MirOutput to query
  * \returns     true if gamma is supported on the hardware, otherwise not supported
  */
-bool mir_output_is_gamma_supported(MirOutput const* client_output);
+bool mir_output_is_gamma_supported(MirOutput const* output);
 
 /** Gets the gamma size
  *
@@ -547,7 +547,7 @@ bool mir_output_is_gamma_supported(MirOutput const* client_output);
  * \returns     The size of the gamma ramp LUT
  *
  */
-uint32_t mir_output_get_gamma_size(MirOutput const* client_output);
+uint32_t mir_output_get_gamma_size(MirOutput const* output);
 
 /** Get the gamma ramp of a display
  *
@@ -559,7 +559,7 @@ uint32_t mir_output_get_gamma_size(MirOutput const* client_output);
  * \param [out] blue    The blue gamma ramp
  * \param [in]  size    The size of the gamma ramp
  */
-void mir_output_get_gamma(MirOutput const* client_output,
+void mir_output_get_gamma(MirOutput const* output,
                           uint16_t* red,
                           uint16_t* green,
                           uint16_t* blue,
@@ -573,7 +573,7 @@ void mir_output_get_gamma(MirOutput const* client_output,
  * \param [in]  blue    The blue gamma ramp
  * \param [in]  size    The size of the gamma ramp
  */
-void mir_output_set_gamma(MirOutput* client_output,
+void mir_output_set_gamma(MirOutput* output,
                           uint16_t const* red,
                           uint16_t const* green,
                           uint16_t const* blue,

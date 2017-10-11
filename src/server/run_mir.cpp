@@ -2,7 +2,7 @@
  * Copyright © 2013-2014 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 3,
+ * under the terms of the GNU General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -52,7 +52,7 @@ extern "C" void perform_emergency_cleanup()
 
 extern "C" { typedef void (*sig_handler)(int); }
 
-volatile sig_handler old_handler[SIGUNUSED]  = { nullptr };
+volatile sig_handler old_handler[NSIG]  = { nullptr };
 
 extern "C" void fatal_signal_cleanup(int sig)
 {

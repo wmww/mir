@@ -1,6 +1,11 @@
 # We need MIRPLATFORM_ABI in both libmirplatform and the platform implementations.
 set(MIRPLATFORM_ABI 16)
 
+set(MIRAL_VERSION_MAJOR 1)
+set(MIRAL_VERSION_MINOR 5)
+set(MIRAL_VERSION_PATCH 0)
+set(MIRAL_VERSION ${MIRAL_VERSION_MAJOR}.${MIRAL_VERSION_MINOR}.${MIRAL_VERSION_PATCH})
+
 # Add the cookie implementation before exposing any APIs
 add_subdirectory(cookie/)
 
@@ -13,6 +18,7 @@ set(MIR_CLIENT_PLATFORM_PATH
 # Add the core and platform implementations before exposing any private APIs
 add_subdirectory(core)
 add_subdirectory(platforms/)
+add_subdirectory(miral/)
 
 # the src/include/... directories should be private to the implementation
 include_directories(${PROJECT_SOURCE_DIR}/src/include/common)
@@ -20,6 +26,7 @@ set(MIR_GENERATED_INCLUDE_DIRECTORIES)
 add_subdirectory(capnproto/)
 add_subdirectory(common/)
 add_subdirectory(protobuf/)
+add_subdirectory(protocol/)
 include_directories(${MIR_GENERATED_INCLUDE_DIRECTORIES})
 
 add_subdirectory(platform/)

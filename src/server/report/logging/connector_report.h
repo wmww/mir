@@ -2,7 +2,7 @@
  * Copyright © 2013 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 3,
+ * under the terms of the GNU General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -49,6 +49,7 @@ public:
     void listening_on(std::string const& endpoint) override;
 
     void error(std::exception const& error) override;
+    void warning(std::string const& error) override;
 
 private:
     std::shared_ptr<mir::logging::Logger> const logger;

@@ -2,7 +2,7 @@
  * Copyright © 2012 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 3,
+ * under the terms of the GNU General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -56,12 +56,6 @@ public:
     virtual std::shared_ptr<BufferStream> get_buffer_stream(BufferStreamId stream) const = 0;
     virtual BufferStreamId create_buffer_stream(graphics::BufferProperties const& props) = 0;
     virtual void destroy_buffer_stream(BufferStreamId stream) = 0;
-
-    virtual graphics::BufferID create_buffer(graphics::BufferProperties const& properties) = 0;
-    virtual graphics::BufferID create_buffer(geometry::Size, MirPixelFormat) = 0;
-    virtual graphics::BufferID create_buffer(geometry::Size, uint32_t native_format, uint32_t native_flags) = 0;
-    virtual void destroy_buffer(graphics::BufferID) = 0;
-    virtual std::shared_ptr<graphics::Buffer> get_buffer(graphics::BufferID) = 0;
 
     virtual std::string name() const = 0;
 

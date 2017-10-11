@@ -2,7 +2,7 @@
  * Copyright © 2014 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 3,
+ * under the terms of the GNU General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -26,4 +26,5 @@ void mrn::ConnectorReport::creating_session_for(int /*socket_handle*/) {}
 void mrn::ConnectorReport::creating_socket_pair(int /*server_handle*/, int /*client_handle*/) {}
 void mrn::ConnectorReport::listening_on(std::string const& /*endpoint*/) {}
 void mrn::ConnectorReport::error(std::exception const& /*error*/) {}
+void mrn::ConnectorReport::warning(std::string const& /*error*/) {}
 

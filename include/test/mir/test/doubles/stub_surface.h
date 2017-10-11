@@ -2,7 +2,7 @@
  * Copyright © 2015 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 3,
+ * under the terms of the GNU General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -32,7 +32,6 @@ struct StubSurface : scene::Surface
 {
     std::string name() const override;
     void move_to(geometry::Point const& top_left) override;
-    float alpha() const override;
     geometry::Size size() const override;
     geometry::Size client_size() const override;
     std::shared_ptr<frontend::BufferStream> primary_buffer_stream() const override;

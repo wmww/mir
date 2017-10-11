@@ -2,7 +2,7 @@
  * Copyright © 2014 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 3 as
+ * it under the terms of the GNU General Public License version 2 or 3 as
  * published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -31,6 +31,7 @@
 #include "mir/client/surface_map.h"
 #include "mir/input/input_devices.h"
 
+#include "mir/input/null_input_receiver_report.h"
 #include "mir/test/doubles/null_client_event_sink.h"
 #include "mir/test/doubles/mock_mir_buffer_stream.h"
 #include "mir/test/doubles/mock_client_buffer.h"
@@ -248,6 +249,7 @@ public:
                   std::make_shared<mcl::DisplayConfiguration>(),
                   std::make_shared<mir::input::InputDevices>(surface_map),
                   std::make_shared<mclr::NullRpcReport>(),
+                  std::make_shared<mir::input::receiver::NullInputReceiverReport>(),
                   lifecycle,
                   std::make_shared<mir::client::PingHandler>(),
                   std::make_shared<mir::client::ErrorHandler>(),
@@ -404,6 +406,7 @@ TEST_F(MirProtobufRpcChannelTest, notifies_streams_of_disconnect)
                   std::make_shared<mcl::DisplayConfiguration>(),
                   std::make_shared<mir::input::InputDevices>(stream_map),
                   std::make_shared<mclr::NullRpcReport>(),
+                  std::make_shared<mir::input::receiver::NullInputReceiverReport>(),
                   lifecycle,
                   std::make_shared<mir::client::PingHandler>(),
                   std::make_shared<mir::client::ErrorHandler>(),
@@ -760,6 +763,7 @@ TEST_F(MirProtobufRpcChannelTest, creates_buffer_if_not_in_map)
                   std::make_shared<mcl::DisplayConfiguration>(),
                   std::make_shared<mir::input::InputDevices>(stream_map),
                   std::make_shared<mclr::NullRpcReport>(),
+                  std::make_shared<mir::input::receiver::NullInputReceiverReport>(),
                   lifecycle,
                   std::make_shared<mir::client::PingHandler>(),
                   std::make_shared<mir::client::ErrorHandler>(),
@@ -798,6 +802,7 @@ TEST_F(MirProtobufRpcChannelTest, reuses_buffer_if_in_map)
                   std::make_shared<mcl::DisplayConfiguration>(),
                   std::make_shared<mir::input::InputDevices>(stream_map),
                   std::make_shared<mclr::NullRpcReport>(),
+                  std::make_shared<mir::input::receiver::NullInputReceiverReport>(),
                   lifecycle,
                   std::make_shared<mir::client::PingHandler>(),
                   std::make_shared<mir::client::ErrorHandler>(),
@@ -834,9 +839,34 @@ TEST_F(MirProtobufRpcChannelTest, sends_incoming_buffer_to_stream_if_stream_id_p
                   std::make_shared<mcl::DisplayConfiguration>(),
                   std::make_shared<mir::input::InputDevices>(stream_map),
                   std::make_shared<mclr::NullRpcReport>(),
+                  std::make_shared<mir::input::receiver::NullInputReceiverReport>(),
                   lifecycle,
                   std::make_shared<mir::client::PingHandler>(),
                   std::make_shared<mir::client::ErrorHandler>(),
                   std::make_shared<mtd::NullClientEventSink>()};
     channel.on_data_available();
+}
+
+TEST_F(MirProtobufRpcChannelTest, ignores_update_message_for_unknown_buffer)
+{
+    mir::protobuf::EventSequence seq;
+    auto request = seq.mutable_buffer_request();
+    request->mutable_buffer()->set_buffer_id(42);
+    request->set_operation(mir::protobuf::BufferOperation::update);
+
+    set_async_buffer_message(seq, *transport);
+
+    channel->on_data_available();
+}
+
+TEST_F(MirProtobufRpcChannelTest, ignores_delete_message_for_unknown_buffer)
+{
+    mir::protobuf::EventSequence seq;
+    auto request = seq.mutable_buffer_request();
+    request->mutable_buffer()->set_buffer_id(42);
+    request->set_operation(mir::protobuf::BufferOperation::remove);
+
+    set_async_buffer_message(seq, *transport);
+
+    channel->on_data_available();
 }

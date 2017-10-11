@@ -2,7 +2,7 @@
  * Copyright © 2012-2015 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 3,
+ * under the terms of the GNU General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -25,7 +25,7 @@
 #include "mir/scene/prompt_session.h"
 #include "mir/scene/application_not_responding_detector.h"
 #include "mir/shell/surface_stack.h"
-#include "session_event_sink.h"
+#include "mir/scene/session_event_sink.h"
 #include "mir/frontend/event_sink.h"
 #include "mir/graphics/display.h"
 #include "mir/graphics/display_configuration.h"

@@ -2,7 +2,7 @@
  * Copyright © 2014 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 3,
+ * under the terms of the GNU General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -51,5 +51,10 @@ void mir::report::lttng::ConnectorReport::listening_on(std::string const& endpoi
 void mir::report::lttng::ConnectorReport::error(std::exception const& error)
 {
     mir_tracepoint(mir_server_connector, error, boost::diagnostic_information(error).c_str());
+}
+
+void mir::report::lttng::ConnectorReport::warning(std::string const& error)
+{
+    mir_tracepoint(mir_server_connector, error, error.c_str());
 }
 

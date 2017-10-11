@@ -2,7 +2,7 @@
  * Copyright © 2017 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License version 3,
+ * under the terms of the GNU Lesser General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -506,7 +506,7 @@ void mir_window_spec_set_pointer_confinement(MirWindowSpec* spec, MirPointerConf
  * \param [in] spec             the spec to update
  * \param [in] rect             the destination rectangle to align with
  * \param [in] rect_gravity     the point on \p rect to align with
- * \param [in] surface_gravity  the point on the window to align with
+ * \param [in] window_gravity   the point on the window to align with
  * \param [in] placement_hints  positioning hints to use when limited on space
  * \param [in] offset_dx        horizontal offset to shift w.r.t. \p rect
  * \param [in] offset_dy        vertical offset to shift w.r.t. \p rect

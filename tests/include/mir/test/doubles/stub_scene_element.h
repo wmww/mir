@@ -2,7 +2,7 @@
  * Copyright © 2014 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 3,
+ * under the terms of the GNU General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -20,7 +20,6 @@
 #define MIR_TEST_DOUBLES_STUB_SCENE_ELEMENT_H_
 
 #include "mir/compositor/scene_element.h"
-#include "mir/compositor/decoration.h"
 #include "stub_renderable.h"
 
 namespace mir
@@ -54,11 +53,6 @@ public:
 
     void occluded() override
     {
-    }
-
-    std::unique_ptr<compositor::Decoration> decoration() const override
-    {
-        return nullptr;
     }
 
 private:

@@ -2,7 +2,7 @@
  * Copyright © 2016 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License version 3,
+ * under the terms of the GNU Lesser General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -17,7 +17,7 @@
  */
 
 #include "software_buffer.h"
-#include "shm_file.h"
+#include "mir/shm_file.h"
 #include "native_buffer.h"
 
 namespace mg = mir::graphics;
@@ -26,7 +26,7 @@ namespace mgc = mir::graphics::common;
 namespace geom = mir::geometry;
 
 mge::SoftwareBuffer::SoftwareBuffer(
-    std::unique_ptr<mgc::ShmFile> shm_file,
+    std::unique_ptr<mir::ShmFile> shm_file,
     geom::Size const& size,
     MirPixelFormat const& pixel_format) :
     ShmBuffer(std::move(shm_file), size, pixel_format),

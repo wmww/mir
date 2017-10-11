@@ -2,7 +2,7 @@
  * Copyright © 2012-2014 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 3 as
+ * it under the terms of the GNU General Public License version 2 or 3 as
  * published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -329,27 +329,6 @@ TEST_F(SurfaceCreation, impossible_resize_clamps)
         EXPECT_NO_THROW({ surface.resize(size); });
         EXPECT_EQ(expect_size, surface.size());
     }
-}
-
-TEST_F(SurfaceCreation, test_surface_set_alpha)
-{
-    using namespace testing;
-
-    float alpha = 0.5f;
-
-    surface.set_alpha(alpha);
-    EXPECT_FLOAT_EQ(alpha, surface.alpha());
-    auto renderables = surface.generate_renderables(nullptr);
-    ASSERT_THAT(renderables.size(), Ge(1));
-    EXPECT_FLOAT_EQ(alpha, renderables[0]->alpha());
-    
-    alpha = 0.1;
-
-    surface.set_alpha(alpha);
-    EXPECT_FLOAT_EQ(alpha, surface.alpha());
-    renderables = surface.generate_renderables(nullptr);
-    ASSERT_THAT(renderables.size(), Ge(1));
-    EXPECT_FLOAT_EQ(alpha, renderables[0]->alpha());
 }
 
 TEST_F(SurfaceCreation, consume_calls_send_event)

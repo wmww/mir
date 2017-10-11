@@ -2,7 +2,7 @@
  * Copyright © 2015 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 3,
+ * under the terms of the GNU General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -27,11 +27,6 @@ std::string mtd::StubSurface::name() const
 
 void mtd::StubSurface::move_to(mir::geometry::Point const& /*top_left*/)
 {
-}
-
-float mtd::StubSurface::alpha() const
-{
-    return 0;
 }
 
 mir::geometry::Size mtd::StubSurface::size() const

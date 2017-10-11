@@ -2,7 +2,7 @@
  * Copyright © 2012 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License version 3,
+ * under the terms of the GNU Lesser General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -210,6 +210,7 @@ extern "C"
  * \param [in] options options to use for this platform
  * \param [in] emergency_cleanup_registry object to register emergency shutdown handlers with
  * \param [in] report the object to use to report interesting events from the display subsystem
+ * \param [in] logger the object to use to log interesting events from the display subsystem
  *
  * This factory function needs to be implemented by each platform.
  *

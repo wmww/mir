@@ -2,7 +2,7 @@
  * Copyright © 2014 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License version 3,
+ * under the terms of the GNU Lesser General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -19,6 +19,9 @@
 #include "mir/log.h"
 #include "mir/logging/logger.h"
 #include <cstdio>
+
+#include <exception>
+#include <boost/exception/diagnostic_information.hpp>
 
 namespace mir {
 
@@ -49,6 +52,38 @@ void log(logging::Severity sev, char const* component,
          std::string const& message)
 {
     logging::log(sev, message, component);
+}
+
+
+void log(
+    logging::Severity severity,
+    char const* component,
+    std::exception_ptr const& ex,
+    std::string const& message)
+{
+    try
+    {
+        std::rethrow_exception(ex);
+    }
+    catch(std::exception const& err)
+    {
+        // TODO: We can probably format this better by pulling out
+        // the boost::errinfo's ourselves.
+        mir::log(
+            severity,
+            component,
+            "%s: %s",
+            message.c_str(),
+            boost::diagnostic_information(err).c_str());
+    }
+    catch(...)
+    {
+        mir::log(
+            severity,
+            component,
+            "%s: unknown exception",
+            message.c_str());
+    }
 }
 
 } // namespace mir

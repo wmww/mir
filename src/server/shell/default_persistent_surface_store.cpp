@@ -2,7 +2,7 @@
  * Copyright © 2015 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 3 as
+ * it under the terms of the GNU General Public License version 2 or 3 as
  * published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -82,6 +82,7 @@ msh::DefaultPersistentSurfaceStore::~DefaultPersistentSurfaceStore()
 auto msh::DefaultPersistentSurfaceStore::id_for_surface(std::shared_ptr<scene::Surface> const& surface)
     -> Id
 {
+    std::lock_guard<std::mutex> lock{mutex};
     return store->insert_or_retrieve(surface);
 }
 
@@ -89,6 +90,7 @@ std::shared_ptr<ms::Surface> msh::DefaultPersistentSurfaceStore::surface_for_id(
 {
     try
     {
+        std::lock_guard<std::mutex> lock{mutex};
         return (*store)[id];
     }
     catch (std::out_of_range& err)

@@ -2,7 +2,7 @@
  * Copyright © 2012 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 3,
+ * under the terms of the GNU General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -79,10 +79,7 @@ public:
     void add_observer(std::shared_ptr<scene::SurfaceObserver> const&) override {}
     void remove_observer(std::weak_ptr<scene::SurfaceObserver> const&) override {}
     bool has_submitted_buffer() const override { return true; }
-    void associate_buffer(graphics::BufferID) override {}
-    void disassociate_buffer(graphics::BufferID) override {}
     void set_scale(float) override {}
-    bool suitable_for_cursor() const override { return false; }
 
     std::shared_ptr<graphics::Buffer> stub_compositor_buffer;
     int nready = 0;

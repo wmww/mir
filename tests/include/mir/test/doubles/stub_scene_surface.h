@@ -2,7 +2,7 @@
  * Copyright © 2014 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 3,
+ * under the terms of the GNU General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -53,7 +53,6 @@ public:
     graphics::RenderableList generate_renderables(compositor::CompositorID) const override { return {}; }
     int buffers_ready_for_compositor(void const*) const override { return 0; }
 
-    float alpha() const override { return 0.0f;}
     MirWindowType type() const override { return mir_window_type_normal; }
     MirWindowState state() const override { return mir_window_state_unknown; }
 

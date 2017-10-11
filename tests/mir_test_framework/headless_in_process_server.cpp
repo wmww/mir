@@ -2,7 +2,7 @@
  * Copyright © 2014 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 3,
+ * under the terms of the GNU General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -18,12 +18,24 @@
 
 #include "mir_test_framework/headless_in_process_server.h"
 #include "mir_test_framework/stub_server_platform_factory.h"
+#include <mir/shell/canonical_window_manager.h>
 
 namespace mtf = mir_test_framework;
+namespace msh = mir::shell;
 
 mtf::HeadlessInProcessServer::HeadlessInProcessServer()
 {
     add_to_environment("MIR_SERVER_NO_FILE", "");
+
+    server.override_the_window_manager_builder([this](msh::FocusController* focus_controller)
+        {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+            return std::make_shared<msh::CanonicalWindowManager>(
+                    focus_controller,
+                    server.the_shell_display_layout());
+#pragma GCC diagnostic pop
+        });
 }
 
 void mtf::HeadlessInProcessServer::SetUp()

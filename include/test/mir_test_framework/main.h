@@ -2,7 +2,7 @@
  * Copyright © 2015 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 3,
+ * under the terms of the GNU General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -23,11 +23,11 @@ namespace mir_test_framework
 {
 /**
  * Initialize and run the mir test framework as follows:
- *
+ * \code
  *    ::testing::InitGoogleTest(&argc, argv);
  *    set_commandline(argc, argv);
  *    return RUN_ALL_TESTS();
- *
+ * \endcode
  * \attention If you override main() for your own purposes call this or do
  * something equivalent to run the tests.
  */

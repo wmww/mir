@@ -2,7 +2,7 @@
  * Copyright © 2016 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 3,
+ * under the terms of the GNU General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -70,6 +70,8 @@ private:
     // needs to be owned (but not used) in Mir, where better?
     std::shared_ptr<InputDeviceHub> const devices_wrapper_DO_NOT_USE;
     std::shared_ptr<InputDeviceObserver> const device_observer;
+    struct SessionObserver;
+    std::unique_ptr<SessionObserver> const session_observer;
     bool base_configuration_applied;
 
     std::weak_ptr<frontend::Session> focused_session;

@@ -1,14 +1,5 @@
-mir_add_wrapped_executable(mir_demo_standalone_render_surfaces
-  render_surfaces.cpp
-  buffer_render_target.cpp
-  image_renderer.cpp
-)
-
-target_link_libraries(mir_demo_standalone_render_surfaces
-  mirserver
-  exampleserverconfig
-  ${Boost_LIBRARIES}
-)
+add_subdirectory(miral-kiosk)
+add_subdirectory(miral-shell)
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99 -Wall -fno-strict-aliasing -Wextra")
 
@@ -18,25 +9,16 @@ add_library(eglapp STATIC
 )
 
 add_library(exampleserverconfig STATIC
-  server_example_basic_window_manager.cpp
-  server_example_basic_window_manager.h
-  server_example_canonical_window_manager.cpp
-  server_example_display_configuration_policy.cpp
   server_example_input_device_config.cpp
   server_example_input_event_filter.cpp
   server_example_log_options.cpp
   server_example_input_filter.cpp
   server_example_host_lifecycle_event.cpp
-  server_example_window_management.cpp
   server_example_custom_compositor.cpp
   server_example_adorning_compositor.cpp
-  server_example_cursor_images.cpp
-  server_example_cursor_images.h
-  xcursor_loader.cpp
-  xcursor_loader.h
-  xcursor.c
-  xcursor.h
 )
+
+target_link_libraries(exampleserverconfig mirserver)
 
 target_link_libraries(eglapp
   mirclient
@@ -184,23 +166,13 @@ target_link_libraries(mir_demo_client_prompt_session mirclient)
 add_library(mirdraw STATIC graphics_utils.cpp)
 
 include_directories(
+  ${PROJECT_SOURCE_DIR}/include/miral
   ${PROJECT_SOURCE_DIR}/include/server
   ${PROJECT_SOURCE_DIR}/include/client
   ${PROJECT_SOURCE_DIR}/include/platform
   ${PROJECT_SOURCE_DIR}/include/renderers/gl
   ${PROJECT_SOURCE_DIR}/include/renderers/sw
   ${GL_INCLUDE_DIRS}
-)
-
-mir_add_wrapped_executable(mir_demo_standalone_render_to_fb
-    render_to_fb.cpp
-)
-
-target_link_libraries(mir_demo_standalone_render_to_fb
-    mirserver
-    mirdraw
-    ${GL_LIBRARIES}
-    ${Boost_LIBRARIES}
 )
 
 add_library(mir_demo_server_loadable MODULE
@@ -210,7 +182,8 @@ add_library(mir_demo_server_loadable MODULE
 )
 
 target_link_libraries(mir_demo_server_loadable
-  mirserver
+  miral-shell-lib
+  miral
   exampleserverconfig
   ${GLog_LIBRARY}
   ${GFlags_LIBRARY}
@@ -228,9 +201,6 @@ mir_add_wrapped_executable(mir_demo_server
 target_link_libraries(mir_demo_server
   dl
 )
-
-mir_add_wrapped_executable(mir_demo_server_minimal server_minimal.cpp)
-target_link_libraries(mir_demo_server_minimal mirserver)
 
 if (MIR_ENABLE_TESTS)
   add_executable(mir_symbol_test
@@ -268,15 +238,6 @@ if (MIR_ENABLE_TESTS)
   endif ()
 endif ()
 
-add_executable(mir_cursor_theme_dump
-  cursor-theme-dump.cpp
-)
-
-target_link_libraries(mir_cursor_theme_dump
-  exampleserverconfig
-  mirserver
-)
-
 mir_add_wrapped_executable(mir_demo_client_multistream
   multi_stream.cpp
 )
@@ -313,6 +274,15 @@ target_link_libraries(mir_demo_client_chain_jumping_buffers
   mirclient
 )
 
+include_directories(${MIR_GENERATED_INCLUDE_DIRECTORIES})
+
+mir_add_wrapped_executable(mir_demo_client_wayland wayland_client.c)
+target_link_libraries(mir_demo_client_wayland
+
+  ${WAYLAND_CLIENT_LIBRARIES}
+)
+
 mir_add_wrapped_executable(mir_demo_client_screencast screencast.cpp)
 
 target_link_libraries(mir_demo_client_screencast mirclient)
+

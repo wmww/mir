@@ -2,7 +2,7 @@
  * Copyright © 2013 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 3,
+ * under the terms of the GNU General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -43,6 +43,7 @@ public:
     std::shared_ptr<renderer::RendererFactory> the_renderer_factory() override;
     std::shared_ptr<input::InputManager> the_input_manager() override;
     std::shared_ptr<shell::InputTargeter> the_input_targeter() override;
+    shell::WindowManagerBuilder the_window_manager_builder() override;
 
     std::shared_ptr<graphics::Cursor> the_cursor() override;
     std::shared_ptr<logging::Logger> the_logger() override;

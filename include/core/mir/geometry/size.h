@@ -2,7 +2,7 @@
  * Copyright © 2012, 2016 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License version 3,
+ * under the terms of the GNU Lesser General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -29,12 +29,12 @@ namespace geometry
 
 struct Size
 {
-    constexpr Size() {}
-    constexpr Size(Size const&) = default;
-    Size& operator=(Size const&) = default;
+    constexpr Size() noexcept {}
+    constexpr Size(Size const&) noexcept = default;
+    Size& operator=(Size const&) noexcept = default;
 
     template<typename WidthType, typename HeightType>
-    constexpr Size(WidthType&& width, HeightType&& height) : width(width), height(height) {}
+    constexpr Size(WidthType&& width, HeightType&& height) noexcept : width(width), height(height) {}
 
     Width width;
     Height height;

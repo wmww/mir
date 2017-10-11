@@ -2,7 +2,7 @@
  * Copyright © 2012 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License version 3,
+ * under the terms of the GNU Lesser General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -29,6 +29,11 @@ namespace mir
 namespace input
 {
 class InputDevices;
+
+namespace receiver
+{
+class InputReceiverReport;
+}
 }
 namespace client
 {
@@ -50,6 +55,7 @@ make_rpc_channel(
     std::shared_ptr<DisplayConfiguration> const& disp_conf,
     std::shared_ptr<input::InputDevices> const& input_devices,
     std::shared_ptr<RpcReport> const& rpc_report,
+    std::shared_ptr<input::receiver::InputReceiverReport> const& input_report,
     std::shared_ptr<LifecycleControl> const& lifecycle_control,
     std::shared_ptr<PingHandler> const& ping_handler,
     std::shared_ptr<ErrorHandler> const& error_handler,

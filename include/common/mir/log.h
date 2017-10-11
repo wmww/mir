@@ -4,7 +4,7 @@
  * Copyright © 2014 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License version 3,
+ * under the terms of the GNU Lesser General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -34,6 +34,11 @@ void log(logging::Severity sev, const char *component,
          char const* fmt, ...);
 void log(logging::Severity sev, const char *component,
          std::string const& message);
+void log(
+    logging::Severity sev,
+    char const* component,
+    std::exception_ptr const& exception,
+    std::string const& message);
 
 #ifndef MIR_LOG_COMPONENT
 #ifdef MIR_LOG_COMPONENT_FALLBACK
@@ -79,6 +84,13 @@ inline void log_critical(std::string const& message)
                MIR_LOG_COMPONENT, message);
 }
 
+template<typename... Args>
+void log_critical(char const* fmt, Args&&... args)
+{
+    ::mir::log(::mir::logging::Severity::critical,
+        MIR_LOG_COMPONENT, fmt, std::forward<Args>(args)...);
+}
+
 inline void log_error(std::string const& message)
 {
     ::mir::log(::mir::logging::Severity::error,
@@ -97,7 +109,6 @@ void log_warning(char const* fmt, Args&&... args)
     ::mir::log(::mir::logging::Severity::warning,
                MIR_LOG_COMPONENT, fmt, std::forward<Args>(args)...);
 }
-
 } // (nested anonymous) namespace
 #endif
 

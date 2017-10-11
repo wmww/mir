@@ -2,7 +2,7 @@
  * Copyright © 2015 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 3,
+ * under the terms of the GNU General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -141,31 +141,6 @@ void mtd::StubSession::destroy_surface(std::weak_ptr<scene::Surface> const& /*su
 
 void mtd::StubSession::send_input_config(MirInputConfig const& /*config*/)
 {
-}
-
-mir::graphics::BufferID mtd::StubSession::create_buffer(mir::graphics::BufferProperties const&)
-{
-    return mir::graphics::BufferID(3);
-}
-
-mir::graphics::BufferID mtd::StubSession::create_buffer(mir::geometry::Size, uint32_t, uint32_t)
-{
-    return mir::graphics::BufferID(3);
-}
-
-mir::graphics::BufferID mtd::StubSession::create_buffer(mir::geometry::Size, MirPixelFormat)
-{
-    return mir::graphics::BufferID(3);
-}
-
-void mtd::StubSession::destroy_buffer(mir::graphics::BufferID)
-{
-}
-
-std::shared_ptr<mir::graphics::Buffer> mtd::StubSession::get_buffer(graphics::BufferID)
-{
-    return std::make_shared<mtd::StubBuffer>(
-        std::make_shared<mir_test_framework::NativeBuffer>(graphics::BufferProperties{}));
 }
 
 namespace

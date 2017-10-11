@@ -2,7 +2,7 @@
  * Copyright © 2013-2014 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 3,
+ * under the terms of the GNU General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -23,6 +23,7 @@
 
 #include "mir/options/default_configuration.h"
 #include "mir/graphics/cursor.h"
+#include "mir/shell/canonical_window_manager.h"
 
 #include "mir/test/doubles/stub_display_buffer.h"
 #include "mir/test/doubles/stub_renderer.h"
@@ -134,4 +135,15 @@ std::shared_ptr<ml::Logger> mtf::StubbedServerConfiguration::the_logger()
         return DefaultServerConfiguration::the_logger();
 
     return std::make_shared<mtd::NullLogger>();
+}
+
+mir::shell::WindowManagerBuilder mir_test_framework::StubbedServerConfiguration::the_window_manager_builder()
+{
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+    return [this](msh::FocusController* focus_controller)
+        { return std::make_shared<msh::CanonicalWindowManager>(
+        focus_controller,
+        the_shell_display_layout()); };
+#pragma GCC diagnostic pop
 }

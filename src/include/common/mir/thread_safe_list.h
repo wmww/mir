@@ -2,7 +2,7 @@
  * Copyright © 2014 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License version 3,
+ * under the terms of the GNU Lesser General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -34,7 +34,7 @@ namespace mir
  *    - copy-assignable
  *  - add():
  *    - copy-assignable
- *    - operator bool: returns whether this is a valid element
+ *    - conversion to bool: indicates whether this is a valid element
  *  - remove(), remove_all():
  *    - copy-assignable
  *    - Element{}: default construction should create an invalid element
@@ -42,7 +42,7 @@ namespace mir
  *    - bool operator!=: inequality of elements
  *  - clear():
  *    - copy-assignable
- *    - Element{}: default construction should create an invalid element
+ *    - Element{}: value initialization should create an invalid element
  */
 
 template<class Element>
@@ -60,7 +60,7 @@ private:
     {
         ListItem() {}
         RecursiveReadWriteMutex mutex;
-        Element element;
+        Element element{};
         std::atomic<ListItem*> next{nullptr};
 
         ~ListItem() { delete next.load(); }

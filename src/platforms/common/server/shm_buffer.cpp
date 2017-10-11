@@ -2,7 +2,7 @@
  * Copyright © 2013 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License version 3,
+ * under the terms of the GNU Lesser General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -18,7 +18,7 @@
  */
 
 #include "mir/graphics/gl_format.h"
-#include "shm_file.h"
+#include "mir/shm_file.h"
 #include "shm_buffer.h"
 #include "buffer_texture_binder.h"
 

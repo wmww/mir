@@ -9,7 +9,6 @@ set(
 
   default_display_buffer_compositor.cpp
   default_display_buffer_compositor_factory.cpp
-  temporary_buffers.cpp
   buffer_stream_factory.cpp
   multi_threaded_compositor.cpp
   occlusion.cpp
@@ -18,7 +17,6 @@ set(
   compositing_screencast.cpp
   stream.cpp
   multi_monitor_arbiter.cpp
-  buffer_map.cpp
   dropping_schedule.cpp
   queueing_schedule.cpp
 )

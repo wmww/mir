@@ -2,7 +2,7 @@
  * Copyright © 2012 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 3,
+ * under the terms of the GNU General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -33,6 +33,13 @@
 
 namespace mir
 {
+namespace input
+{
+namespace receiver
+{
+class NullInputReceiverReport;
+}
+}
 namespace client
 {
 class SurfaceMap;
@@ -53,6 +60,7 @@ struct TestProtobufClient
     TestProtobufClient(std::string socket_file, int timeout_ms);
 
     std::shared_ptr<doubles::MockRpcReport> rpc_report;
+    std::shared_ptr<input::receiver::NullInputReceiverReport> input_report;
     std::shared_ptr<mir::client::SurfaceMap> surface_map;
     std::shared_ptr<mir::client::rpc::MirBasicRpcChannel> channel;
     std::shared_ptr<dispatch::ThreadedDispatcher> eventloop;

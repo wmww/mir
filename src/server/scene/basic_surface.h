@@ -2,7 +2,7 @@
  * Copyright © 2012-2014 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 3,
+ * under the terms of the GNU General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -79,7 +79,7 @@ public:
 
     std::string name() const override;
     void move_to(geometry::Point const& top_left) override;
-    float alpha() const override;
+
     void set_hidden(bool is_hidden);
 
     geometry::Size size() const override;

@@ -2,7 +2,7 @@
  * Copyright © 2012-2016 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 3,
+ * under the terms of the GNU General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -59,6 +59,8 @@
 #include "mir/fd.h"
 #include "mir/cookie/authority.h"
 #include "mir/module_properties.h"
+#include "mir/graphics/graphic_buffer_allocator.h"
+#include "mir/executor.h"
 
 #include "mir/geometry/rectangles.h"
 #include "protobuf_buffer_packer.h"
@@ -110,7 +112,9 @@ mf::SessionMediator::SessionMediator(
     std::shared_ptr<scene::ApplicationNotRespondingDetector> const& anr_detector,
     std::shared_ptr<mir::cookie::Authority> const& cookie_authority,
     std::shared_ptr<mf::InputConfigurationChanger> const& input_changer,
-    std::vector<mir::ExtensionDescription> const& extensions) :
+    std::vector<mir::ExtensionDescription> const& extensions,
+    std::shared_ptr<mg::GraphicBufferAllocator> const& allocator,
+    mir::Executor& executor) :
     client_pid_(0),
     shell(shell),
     ipc_operations(ipc_operations),
@@ -128,7 +132,9 @@ mf::SessionMediator::SessionMediator(
     anr_detector{anr_detector},
     cookie_authority(cookie_authority),
     input_changer(input_changer),
-    extensions(extensions)
+    extensions(extensions),
+    allocator{allocator},
+    executor{executor}
 {
 }
 
@@ -374,6 +380,63 @@ void mf::SessionMediator::create_surface(
     buffering_sender->uncork();
 }
 
+namespace
+{
+    class AutoSendBuffer : public mg::Buffer
+    {
+    public:
+        AutoSendBuffer(
+            std::shared_ptr<mg::Buffer> const& wrapped,
+            mir::Executor& executor,
+            std::weak_ptr<mf::BufferSink> const& sink)
+            : buffer{wrapped},
+              executor{executor},
+              sink{sink}
+        {
+        }
+        ~AutoSendBuffer()
+        {
+            executor.spawn(
+                [maybe_sink = sink, to_send = std::move(buffer)]()
+                {
+                    if (auto const live_sink = maybe_sink.lock())
+                        live_sink->update_buffer(*to_send);
+                });
+        }
+
+        std::shared_ptr<mir::graphics::NativeBuffer> native_buffer_handle() const override
+        {
+            return buffer->native_buffer_handle();
+        }
+
+        mir::graphics::BufferID id() const override
+        {
+            return buffer->id();
+        }
+
+        mir::geometry::Size size() const override
+        {
+            return buffer->size();
+        }
+
+        MirPixelFormat pixel_format() const override
+        {
+            return buffer->pixel_format();
+        }
+
+        mir::graphics::NativeBufferBase *native_buffer_base() override
+        {
+            return buffer->native_buffer_base();
+        }
+
+    private:
+        std::shared_ptr<mg::Buffer> buffer;
+        mir::Executor& executor;
+        std::weak_ptr<mf::BufferSink> const sink;
+    };
+
+}
+
 void mf::SessionMediator::submit_buffer(
     mir::protobuf::BufferRequest const* request,
     mir::protobuf::Void*,
@@ -388,15 +451,37 @@ void mf::SessionMediator::submit_buffer(
     auto stream = session->get_buffer_stream(stream_id);
 
     mfd::ProtobufBufferPacker request_msg{const_cast<mir::protobuf::Buffer*>(&request->buffer())};
-    auto b = session->get_buffer(buffer_id);
+    auto b = buffer_cache.at(buffer_id);
     ipc_operations->unpack_buffer(request_msg, *b);
 
-    stream->submit_buffer(b);
+    stream->submit_buffer(std::make_shared<AutoSendBuffer>(b, executor, event_sink));
 
     done->Run();
 }
 
-void mf::SessionMediator::allocate_buffers( 
+namespace
+{
+bool validate_buffer_request(mir::protobuf::BufferStreamParameters const& req)
+{
+    // A valid buffer request has either flags & native_format set
+    // or buffer_usage & pixel_format set, not both.
+    return
+        (
+            req.has_pixel_format() &&
+            req.has_buffer_usage() &&
+            !req.has_native_format() &&
+            !req.has_flags()
+        ) ||
+        (
+            !req.has_pixel_format() &&
+            !req.has_buffer_usage() &&
+            req.has_native_format() &&
+            req.has_flags()
+        );
+}
+}
+
+void mf::SessionMediator::allocate_buffers(
     mir::protobuf::BufferAllocation const* request,
     mir::protobuf::Void*,
     google::protobuf::Closure* done)
@@ -409,36 +494,56 @@ void mf::SessionMediator::allocate_buffers(
     for (auto i = 0; i < request->buffer_requests().size(); i++)
     {
         auto const& req = request->buffer_requests(i);
-
-        mg::BufferID id;
-        if (req.has_flags() && req.has_native_format())
+        std::shared_ptr<mg::Buffer> buffer;
+        try
         {
-            id = session->create_buffer({req.width(), req.height()}, req.native_format(), req.flags());
-        }
-        else if (req.has_buffer_usage() && req.has_pixel_format())
-        {
-            auto const usage = static_cast<mg::BufferUsage>(req.buffer_usage());
-            geom::Size const size{req.width(), req.height()};
-            auto const pf = static_cast<MirPixelFormat>(req.pixel_format());
-            if (usage == mg::BufferUsage::software)
+            if (!validate_buffer_request(req))
             {
-                id = session->create_buffer(size, pf); 
+                BOOST_THROW_EXCEPTION(std::logic_error("Invalid buffer request"));
+            }
+
+            if (req.has_flags() && req.has_native_format())
+            {
+                buffer = allocator->alloc_buffer(
+                    {req.width(), req.height()},
+                    req.native_format(),
+                    req.flags());
             }
             else
             {
-                //legacy route, server-selected pf and usage
-                id = session->create_buffer(mg::BufferProperties{size, pf, mg::BufferUsage::hardware});
+                auto const usage = static_cast<mg::BufferUsage>(req.buffer_usage());
+                geom::Size const size{req.width(), req.height()};
+                auto const pf = static_cast<MirPixelFormat>(req.pixel_format());
+                if (usage == mg::BufferUsage::software)
+                {
+                    buffer = allocator->alloc_software_buffer(size, pf);
+                }
+                else
+                {
+                    //legacy route, server-selected pf and usage
+                    buffer =
+                        allocator->alloc_buffer(mg::BufferProperties{size, pf, mg::BufferUsage::hardware});
+                }
             }
-        }
-        else
-        {
-            BOOST_THROW_EXCEPTION(std::logic_error("Invalid buffer request"));
-        }
 
-        if (request->has_id())
+            if (request->has_id())
+            {
+                auto const stream_id = mf::BufferStreamId{request->id().value()};
+                // We don't need the stream, but we *do* need to know it exists
+                auto stream = session->get_buffer_stream(stream_id);
+                stream_associated_buffers.insert(std::make_pair(stream_id, buffer->id()));
+            }
+
+            // TODO: Throw if insert fails (duplicate ID)?
+            buffer_cache.insert(std::make_pair(buffer->id(), buffer));
+            event_sink->add_buffer(*buffer);
+        }
+        catch (std::exception const& err)
         {
-            auto stream = session->get_buffer_stream(mf::BufferStreamId(request->id().value()));
-            stream->associate_buffer(id);
+            event_sink->error_buffer(
+                geom::Size{req.width(), req.height()},
+                static_cast<MirPixelFormat>(req.pixel_format()),
+                err.what());
         }
     }
     done->Run();
@@ -454,26 +559,35 @@ void mf::SessionMediator::release_buffers(
         BOOST_THROW_EXCEPTION(std::logic_error("Invalid application session"));
 
     observer->session_release_buffers_called(session->name());
+
+    std::vector<mg::BufferID> to_release(request->buffers().size());
+    std::transform(
+        request->buffers().begin(),
+        request->buffers().end(),
+        to_release.begin(),
+        [](auto buffer)
+        {
+            return mg::BufferID{static_cast<uint32_t>(buffer.buffer_id())};
+        });
+
     if (request->has_id())
     {
-        auto stream_id = mf::BufferStreamId{request->id().value()};
-        try
+        auto const stream_id = mf::BufferStreamId{request->id().value()};
+
+        auto const associated_range = stream_associated_buffers.equal_range(stream_id);
+        for (auto match = associated_range.first; match != associated_range.second;)
         {
-            auto stream = session->get_buffer_stream(stream_id);
-            for (auto i = 0; i < request->buffers().size(); i++)
+            auto const current = match;
+            ++match;
+            if (std::find(to_release.begin(), to_release.end(), current->second) != to_release.end())
             {
-                mg::BufferID buffer_id{static_cast<uint32_t>(request->buffers(i).buffer_id())};
-                stream->disassociate_buffer(buffer_id);
+                stream_associated_buffers.erase(current);
             }
         }
-        catch(...)
-        {
-        }
     }
-    for (auto i = 0; i < request->buffers().size(); i++)
+    for (auto const& buffer_id : to_release)
     {
-        mg::BufferID buffer_id{static_cast<uint32_t>(request->buffers(i).buffer_id())};
-        session->destroy_buffer(buffer_id);
+        buffer_cache.erase(buffer_id);
     }
    done->Run();
 }
@@ -662,8 +776,6 @@ void mf::SessionMediator::modify_surface(
     {
         mf::BufferStreamId id{surface_specification.cursor_id().value()};
         auto stream = session->get_buffer_stream(id);
-        if (!stream->suitable_for_cursor())
-            BOOST_THROW_EXCEPTION(std::logic_error("Cursor buffer streams must have mir_pixel_format_argb_8888 format"));
         mods.stream_cursor = msh::StreamCursor{
             id, geom::Displacement{surface_specification.hotspot_x(), surface_specification.hotspot_y()} };
     }
@@ -869,7 +981,7 @@ void mf::SessionMediator::screencast_to_buffer(
 {
     auto session = weak_session.lock();
     ScreencastSessionId const screencast_session_id{request->id().value()};
-    auto buffer = session->get_buffer(mg::BufferID{request->buffer_id()});
+    auto buffer = buffer_cache.at(mg::BufferID{request->buffer_id()});
     screencast->capture(screencast_session_id, buffer);
     done->Run();
 }
@@ -921,6 +1033,13 @@ void mf::SessionMediator::release_buffer_stream(
 
     session->destroy_buffer_stream(id);
 
+    auto const associated_range = stream_associated_buffers.equal_range(id) ;
+    for (auto match = associated_range.first; match != associated_range.second; ++match)
+    {
+        buffer_cache.erase(match->second);
+    }
+    stream_associated_buffers.erase(id);
+
     done->Run();
 }
 
@@ -963,9 +1082,6 @@ void mf::SessionMediator::configure_cursor(
         auto const& stream_id = mf::BufferStreamId(cursor_request->buffer_stream().value());
         auto hotspot = geom::Displacement{cursor_request->hotspot_x(), cursor_request->hotspot_y()};
         auto stream = session->get_buffer_stream(stream_id);
-
-        if (!stream->suitable_for_cursor())
-            BOOST_THROW_EXCEPTION(std::logic_error("Cursor buffer streams must have mir_pixel_format_argb_8888 format"));
 
         surface->set_cursor_stream(stream, hotspot);
     }

@@ -2,7 +2,7 @@
  * Copyright © 2012, 2016 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 3,
+ * under the terms of the GNU General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -69,6 +69,7 @@ public:
     // TODO most of these interfaces are wider DisplayServer needs...
     // TODO ...some or all of them need narrowing
     virtual std::shared_ptr<frontend::Connector> the_connector() = 0;
+    virtual std::shared_ptr<frontend::Connector> the_wayland_connector() = 0;
     virtual std::shared_ptr<frontend::Connector> the_prompt_connector() = 0;
     virtual std::shared_ptr<graphics::Display> the_display() = 0;
     virtual std::shared_ptr<compositor::Compositor> the_compositor() = 0;

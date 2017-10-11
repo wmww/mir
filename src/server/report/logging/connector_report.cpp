@@ -2,7 +2,7 @@
  * Copyright © 2013 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 3,
+ * under the terms of the GNU General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -77,6 +77,14 @@ void mrl::ConnectorReport::error(std::exception const& error)
 {
     std::stringstream ss;
     ss << "thread (" << std::this_thread::get_id() << ") Error: " << boost::diagnostic_information(error);
+
+    logger->log(ml::Severity::warning, ss.str(), component);
+}
+
+void mrl::ConnectorReport::warning(std::string const& error)
+{
+    std::stringstream ss;
+    ss << "thread (" << std::this_thread::get_id() << ") " << error;
 
     logger->log(ml::Severity::warning, ss.str(), component);
 }

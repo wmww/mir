@@ -2,7 +2,7 @@
  * Copyright © 2015 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License version 3,
+ * under the terms of the GNU Lesser General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -31,6 +31,7 @@
 #include <boost/throw_exception.hpp>
 
 #include <X11/Xatom.h>
+#include <algorithm>
 
 #define MIR_LOG_COMPONENT "x11-display"
 #include "mir/log.h"
@@ -53,16 +54,19 @@ geom::Size clip_to_display(Display *dpy, geom::Size requested_size)
 
     mir::log_info("Screen resolution = %dx%d", screen_width, screen_height);
 
-    if ((screen_width < requested_size.width.as_uint32_t()+border) ||
-        (screen_height < requested_size.height.as_uint32_t()+border))
+    auto const width  = std::min(requested_size.width,  geom::Width{screen_width-border});
+    auto const height = std::min(requested_size.height, geom::Height{screen_height-border});
+
+    geom::Size const result{width, height};
+
+    if (result != requested_size)
     {
         mir::log_info(" ... is smaller than the requested size (%dx%d) plus border (%d). Clipping to (%dx%d).",
-            requested_size.width.as_uint32_t(), requested_size.height.as_uint32_t(), border,
-            screen_width-border, screen_height-border);
-        return geom::Size{screen_width-border, screen_height-border};
+                      requested_size.width.as_uint32_t(), requested_size.height.as_uint32_t(), border,
+                      width.as_uint32_t(), height.as_uint32_t());
     }
 
-    return requested_size;
+    return result;
 }
 
 auto get_pixel_width(Display *dpy)

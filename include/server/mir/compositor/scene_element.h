@@ -2,7 +2,7 @@
  * Copyright © 2014 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 3,
+ * under the terms of the GNU General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -38,10 +38,6 @@ public:
     virtual std::shared_ptr<graphics::Renderable> renderable() const = 0;
     virtual void rendered() = 0;
     virtual void occluded() = 0;
-
-    //TODO: Decoration is opaque on purpose. It is only used by an internal example,
-    //      and this function should be removed from the public API.
-    virtual std::unique_ptr<Decoration> decoration() const = 0; 
 
 protected:
     SceneElement() = default;

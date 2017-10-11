@@ -2,7 +2,7 @@
  * Copyright © 2014 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License version 3,
+ * under the terms of the GNU Lesser General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -27,6 +27,7 @@ namespace mir
 {
 namespace options
 {
+extern char const* const wayland_socket_name_opt;
 extern char const* const server_socket_opt;
 extern char const* const prompt_socket_opt;
 extern char const* const no_server_socket_opt;

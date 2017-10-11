@@ -1,7 +1,7 @@
 # Copyright © 2012 Canonical Ltd.
 #
 # This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License version 3 as
+# it under the terms of the GNU General Public License version 2 or 3 as
 # published by the Free Software Foundation.
 #
 # This program is distributed in the hope that it will be useful,
@@ -28,7 +28,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 set(MIR_VERSION_MAJOR 0)
-set(MIR_VERSION_MINOR 27)
+set(MIR_VERSION_MINOR 28)
 set(MIR_VERSION_PATCH 0)
 
 add_definitions(-DMIR_VERSION_MAJOR=${MIR_VERSION_MAJOR})
@@ -53,6 +53,7 @@ endif()
 include (cmake/EnableCoverageReport.cmake)
 include (cmake/MirCommon.cmake)
 include (GNUInstallDirs)
+include (cmake/Doxygen.cmake)
 
 set(build_types "None;Debug;Release;RelWithDebInfo;MinSizeRel;Coverage;AddressSanitizer;ThreadSanitizer;UBSanitizer")
 # Change informational string for CMAKE_BUILD_TYPE
@@ -73,6 +74,16 @@ if(HAS_W_MISMATCHED_TAGS)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-mismatched-tags")
 endif()
 
+# GCC 7.1 fixed a bug in the ARM ABI, which results in some std::vector methods
+# (among others) generating this warning.
+#
+# There's nothing we can do about it; everything just needs to be rebuilt with
+# GCC 7.1.
+check_cxx_compiler_flag(-Wpsabi HAS_W_PSABI)
+if(HAS_W_PSABI)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-psabi")
+endif()
+
 option(MIR_USE_LD_GOLD "Enables the \"gold\" linker." OFF)
 if(MIR_USE_LD_GOLD)
   set (CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=gold")
@@ -81,8 +92,6 @@ if(MIR_USE_LD_GOLD)
 endif()
 
 # Link time optimization allows leaner, cleaner libraries
-message(STATUS "CMAKE_C_COMPILER: " ${CMAKE_C_COMPILER})
-
 option(MIR_LINK_TIME_OPTIMIZATION "Enables the linker to optimize binaries." OFF)
 if(MIR_LINK_TIME_OPTIMIZATION)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -flto -ffat-lto-objects")
@@ -207,6 +216,8 @@ find_package(LTTngUST REQUIRED)
 
 pkg_check_modules(UDEV REQUIRED libudev)
 pkg_check_modules(GLIB REQUIRED glib-2.0)
+pkg_check_modules(WAYLAND_SERVER REQUIRED wayland-server)
+pkg_check_modules(WAYLAND_CLIENT REQUIRED wayland-client)
 
 include_directories (SYSTEM ${GLESv2_INCLUDE_DIRS})
 include_directories (SYSTEM ${EGL_INCLUDE_DIRS})
@@ -291,7 +302,7 @@ if (MIR_ENABLE_TESTS)
 
   # There's no nice way to format this. Thanks CMake.
   mir_add_test(NAME LGPL-required
-    COMMAND /bin/sh -c "! grep -rl 'GNU General' ${PROJECT_SOURCE_DIR}/src/client ${PROJECT_SOURCE_DIR}/include/client ${PROJECT_SOURCE_DIR}/src/common ${PROJECT_SOURCE_DIR}/include/common ${PROJECT_SOURCE_DIR}/src/include/common ${PROJECT_SOURCE_DIR}/src/platform ${PROJECT_SOURCE_DIR}/include/platform ${PROJECT_SOURCE_DIR}/src/include/platform ${PROJECT_SOURCE_DIR}/src/capnproto"
+    COMMAND /bin/sh -c "! grep -rl 'GNU General' ${PROJECT_SOURCE_DIR}/src/client ${PROJECT_SOURCE_DIR}/include/client ${PROJECT_SOURCE_DIR}/src/core ${PROJECT_SOURCE_DIR}/include/core ${PROJECT_SOURCE_DIR}/src/common ${PROJECT_SOURCE_DIR}/include/common ${PROJECT_SOURCE_DIR}/src/include/common ${PROJECT_SOURCE_DIR}/src/platform ${PROJECT_SOURCE_DIR}/include/platform ${PROJECT_SOURCE_DIR}/src/include/platform ${PROJECT_SOURCE_DIR}/src/platforms ${PROJECT_SOURCE_DIR}/include/platforms ${PROJECT_SOURCE_DIR}/src/include/platforms ${PROJECT_SOURCE_DIR}/src/renderers ${PROJECT_SOURCE_DIR}/include/renderers ${PROJECT_SOURCE_DIR}/src/include/renderers ${PROJECT_SOURCE_DIR}/src/capnproto"
   )
   mir_add_test(NAME GPL-required
     COMMAND /bin/sh -c "! grep -rl 'GNU Lesser' ${PROJECT_SOURCE_DIR}/src/server ${PROJECT_SOURCE_DIR}/include/server ${PROJECT_SOURCE_DIR}/src/include/server ${PROJECT_SOURCE_DIR}/tests ${PROJECT_SOURCE_DIR}/examples"
@@ -302,7 +313,6 @@ if (MIR_ENABLE_TESTS)
 endif ()
 
 enable_coverage_report(mirserver)
-include (cmake/Doxygen.cmake)
 include (cmake/ABICheck.cmake)
 
 add_custom_target(ptest

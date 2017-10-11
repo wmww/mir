@@ -2,7 +2,7 @@
  * Copyright © 2014 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 3,
+ * under the terms of the GNU General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -66,7 +66,6 @@ public:
     virtual graphics::RenderableList generate_renderables(compositor::CompositorID id) const = 0; 
     virtual int buffers_ready_for_compositor(void const* compositor_id) const = 0;
 
-    virtual float alpha() const = 0; //only used in examples/
     virtual MirWindowType type() const = 0;
     virtual MirWindowState state() const = 0;
     virtual void hide() = 0;

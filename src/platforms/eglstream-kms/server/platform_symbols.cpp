@@ -2,7 +2,7 @@
  * Copyright © 2016 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License version 3,
+ * under the terms of the GNU Lesser General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -176,7 +176,7 @@ mg::PlatformPriority probe_graphics_platform(mo::ProgramOption const& /*options*
                 if (strstr(device_extensions, "EGL_EXT_device_drm") != NULL)
                 {
                     // Check if we can acquire DRM master
-                    int const drm_fd = open(drm_node_for_device(device), O_RDWR | O_CLOEXEC);
+                    mir::Fd const drm_fd{open(drm_node_for_device(device), O_RDWR | O_CLOEXEC)};
                     if (drmSetMaster(drm_fd))
                     {
                         mir::log_debug(

@@ -2,7 +2,7 @@
  * Copyright © 2015 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 3,
+ * under the terms of the GNU General Public License version 2 or 3,
  * as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
@@ -88,12 +88,6 @@ struct StubSession : scene::Session
     void destroy_surface(std::weak_ptr<scene::Surface> const& surface) override;
 
     void send_input_config(MirInputConfig const& config) override;
-
-    graphics::BufferID create_buffer(graphics::BufferProperties const& properties) override;
-    graphics::BufferID create_buffer(geometry::Size, MirPixelFormat) override;
-    graphics::BufferID create_buffer(geometry::Size, uint32_t native_format, uint32_t native_flags) override;
-    void destroy_buffer(graphics::BufferID) override;
-    std::shared_ptr<graphics::Buffer> get_buffer(graphics::BufferID) override;
 
     pid_t pid;
 };
