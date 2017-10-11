@@ -1,4 +1,4 @@
-mir (0.28.0-0ubuntu1) UNRELEASED; urgency=medium
+mir (0.28.0+17.10.20171011.1-0ubuntu1) artful; urgency=medium
 
   * New upstream release 0.28.0(https://launchpad.net/mir/+milestone/0.28.0)
     - ABI summary:
@@ -54,7 +54,7 @@ mir (0.28.0-0ubuntu1) UNRELEASED; urgency=medium
       . [mir-on-x11] Less annoying clipping of Mir-on-X11 window when it exceeds
         display bounds. (LP: #1668599)
 
- -- Alan Griffiths <alan.griffiths@canonical.com>  Thu, 10 Aug 2017 11:54:30 +0000
+ -- Alan Griffiths <alan.griffiths@canonical.com>  Wed, 11 Oct 2017 15:06:23 +0000
 
 mir (0.27.0+17.10.20170630-0ubuntu1) artful; urgency=medium
 
