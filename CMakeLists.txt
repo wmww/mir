@@ -1,4 +1,4 @@
-# Copyright © 2012 Canonical Ltd.
+# Copyright © 2012-2017 Canonical Ltd.
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License version 2 or 3 as
@@ -29,7 +29,7 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 set(MIR_VERSION_MAJOR 0)
 set(MIR_VERSION_MINOR 28)
-set(MIR_VERSION_PATCH 0)
+set(MIR_VERSION_PATCH 1)
 
 add_definitions(-DMIR_VERSION_MAJOR=${MIR_VERSION_MAJOR})
 add_definitions(-DMIR_VERSION_MINOR=${MIR_VERSION_MINOR})
@@ -275,6 +275,16 @@ if (MIR_BUILD_PLATFORM_EGLSTREAM_KMS)
   pkg_check_modules(DRM REQUIRED libdrm)
 endif()
 
+# This incantation gets the MIR_EGL_SUPPORTED default right for Mesa
+execute_process(COMMAND grep mir_toolkit /usr/include/EGL/eglplatform.h
+        OUTPUT_VARIABLE MIR_EGL_SUPPORTED_OUT)
+
+if (MIR_EGL_SUPPORTED_OUT STREQUAL "")
+  option(MIR_EGL_SUPPORTED "Build examples that depend on Mir EGL." OFF)
+else()
+  option(MIR_EGL_SUPPORTED "Build examples that depend on Mir EGL." ON)
+endif()
+
 set(MIR_TRACEPOINT_LIB_INSTALL_DIR ${CMAKE_INSTALL_LIBDIR}/mir/tools)
 
 set(MIR_GENERATED_INCLUDE_DIRECTORIES)
@@ -288,9 +298,10 @@ else ()
   add_definitions(-DMIR_LIBINPUT_HAS_ACCEL_PROFILE=1)
 endif ()
 
-add_subdirectory(benchmarks/)
 add_subdirectory(examples/)
-add_subdirectory(playground/)
+if (MIR_EGL_SUPPORTED)
+  add_subdirectory(playground/)
+endif()
 add_subdirectory(guides/)
 add_subdirectory(cmake/)
 
@@ -299,6 +310,7 @@ if (MIR_ENABLE_TESTS)
   pkg_check_modules(LIBEVDEV REQUIRED libevdev)
   include_directories(${GMOCK_INCLUDE_DIR} ${GTEST_INCLUDE_DIR})
   add_subdirectory(tests/)
+  add_subdirectory(benchmarks/)
 
   # There's no nice way to format this. Thanks CMake.
   mir_add_test(NAME LGPL-required
@@ -313,7 +325,6 @@ if (MIR_ENABLE_TESTS)
 endif ()
 
 enable_coverage_report(mirserver)
-include (cmake/ABICheck.cmake)
 
 add_custom_target(ptest
     COMMAND "${CMAKE_SOURCE_DIR}/tools/run_ctests.sh" "--cost-file" "${CMAKE_BINARY_DIR}/ptest_ctest_cost_data.txt" "sh ${CMAKE_BINARY_DIR}/discover_all_tests.sh" "--" "$$ARGS"
