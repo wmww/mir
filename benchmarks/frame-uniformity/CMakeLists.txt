@@ -38,7 +38,5 @@ target_link_libraries(frame_uniformity_test_client
   mir-test-doubles-static
 
   ${Boost_LIBRARIES}
-  ${GTEST_BOTH_LIBRARIES}
-  ${GMOCK_LIBRARIES}
   ${CMAKE_THREAD_LIBS_INIT} # Link in pthread.
 )
