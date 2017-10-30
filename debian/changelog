@@ -1,5 +1,6 @@
-mir (0.28.1) UNRELEASED; urgency=medium
+mir (0.28.1+18.04.20171030-0ubuntu1) bionic; urgency=medium
 
+  [ Alan Griffiths ]
   * New upstream release 0.28.1(https://launchpad.net/mir/+milestone/0.28.1)
     - ABI summary:
       . mirclient ABI unchanged at 9
@@ -25,7 +26,7 @@ mir (0.28.1) UNRELEASED; urgency=medium
       . Build process depends on Debian toolchain. (LP: #1724202)
       . XWayland clients updates not causing redraw (LP: #1720223)
 
- -- Alan Griffiths <alan@Octopull-desktop>  Tue, 17 Oct 2017 14:14:37 +0100
+ -- Dimitri John Ledkov <xnox@ubuntu.com>  Mon, 30 Oct 2017 19:41:21 +0000
 
 mir (0.28.0+17.10.20171011.1-0ubuntu1) artful; urgency=medium
 
