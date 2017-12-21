@@ -35,7 +35,7 @@ void mi::SeatObserverMultiplexer::seat_remove_device(uint64_t id)
 }
 
 void mi::SeatObserverMultiplexer::seat_dispatch_event(
-    std::shared_ptr<MirEvent const> const& event)
+    std::weak_ptr<MirEvent const> const& event)
 {
     for_each_observer(&mi::SeatObserver::seat_dispatch_event, event);
 }

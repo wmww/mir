@@ -77,13 +77,16 @@ void mrl::SeatReport::seat_remove_device(uint64_t id)
     log->log(ml::Severity::informational, ss.str(), component);
 }
 
-void mrl::SeatReport::seat_dispatch_event(std::shared_ptr<MirEvent const> const& event)
+void mrl::SeatReport::seat_dispatch_event(std::weak_ptr<MirEvent const> const& event)
 {
-    std::stringstream ss;
-    ss << "Dispatch event"
-       << " event_type=" << event->type();
+    if (auto const& e = event.lock())
+    {
+        std::stringstream ss;
+        ss << "Dispatch event"
+           << " event_type=" << e->type();
 
-    log->log(ml::Severity::informational, ss.str(), component);
+        log->log(ml::Severity::informational, ss.str(), component);
+    }
 }
 
 void mrl::SeatReport::seat_set_key_state(uint64_t id, std::vector<uint32_t> const& scan_codes)

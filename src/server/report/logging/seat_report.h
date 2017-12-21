@@ -48,7 +48,7 @@ public:
 
     virtual void seat_add_device(uint64_t id) override;
     virtual void seat_remove_device(uint64_t id) override;
-    virtual void seat_dispatch_event(std::shared_ptr<MirEvent const> const& event) override;
+    virtual void seat_dispatch_event(std::weak_ptr<MirEvent const> const& event) override;
     virtual void seat_set_key_state(uint64_t id, std::vector<uint32_t> const& scan_codes) override;
     virtual void seat_set_pointer_state(uint64_t id, unsigned buttons) override;
     virtual void seat_set_cursor_position(float cursor_x, float cursor_y) override;

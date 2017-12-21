@@ -65,7 +65,7 @@ class NullSeatListener : public mi::SeatObserver
 public:
     void seat_add_device(uint64_t /*id*/) override {}
     void seat_remove_device(uint64_t /*id*/) override {}
-    void seat_dispatch_event(std::shared_ptr<MirEvent const> const& /*event*/) override {}
+    void seat_dispatch_event(std::weak_ptr<MirEvent const> const& /*event*/) override {}
 
     void seat_set_key_state(
         uint64_t /*id*/,
@@ -242,23 +242,26 @@ TEST_F(TestSeatReport, dispatch_event_received)
         {
         }
 
-        void seat_dispatch_event(std::shared_ptr<MirEvent const> const& event) override
+        void seat_dispatch_event(std::weak_ptr<MirEvent const> const& maybe_event) override
         {
-            if (mir_event_get_type(event.get()) == mir_event_type_input)
+            if  (auto const& event = maybe_event.lock())
             {
-                auto iev = mir_event_get_input_event(event.get());
-                if (mir_input_event_get_type(iev) == mir_input_event_type_pointer)
+                if (mir_event_get_type(event.get()) == mir_event_type_input)
                 {
-                    auto pointer = mir_input_event_get_pointer_event(iev);
+                    auto iev = mir_event_get_input_event(event.get());
+                    if (mir_input_event_get_type(iev) == mir_input_event_type_pointer)
+                    {
+                        auto pointer = mir_input_event_get_pointer_event(iev);
 
-                    EXPECT_THAT(
-                        mir_pointer_event_axis_value(pointer, mir_pointer_axis_relative_x),
-                        FloatNear(event_x, 0.5f));
-                    EXPECT_THAT(
-                        mir_pointer_event_axis_value(pointer, mir_pointer_axis_relative_y),
-                        FloatNear(event_y, 0.5f));
+                        EXPECT_THAT(
+                            mir_pointer_event_axis_value(pointer, mir_pointer_axis_relative_x),
+                            FloatNear(event_x, 0.5f));
+                        EXPECT_THAT(
+                            mir_pointer_event_axis_value(pointer, mir_pointer_axis_relative_y),
+                            FloatNear(event_y, 0.5f));
 
-                    pointer_event_seen.raise();
+                        pointer_event_seen.raise();
+                    }
                 }
             }
         }
