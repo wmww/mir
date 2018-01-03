@@ -21,6 +21,16 @@ namespace frontend
 {
 namespace wayland
 {
+#ifndef MIR_TODO_WAYLAND_PLACEHOLDERS
+#define MIR_TODO_WAYLAND_PLACEHOLDERS
+// placeholders for stuff still I need to do correctly
+namespace placeholder
+ {
+auto const version = 1;
+auto const count = 0;
+auto const pointer = nullptr;
+}
+#endif
 class Callback
 {
 protected:

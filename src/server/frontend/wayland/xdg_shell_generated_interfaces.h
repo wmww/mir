@@ -21,7 +21,28 @@ namespace frontend
 {
 namespace wayland
 {
+#ifndef MIR_TODO_WAYLAND_PLACEHOLDERS
+#define MIR_TODO_WAYLAND_PLACEHOLDERS
+// placeholders for stuff still I need to do correctly
+namespace placeholder
+ {
+auto const version = 1;
+auto const count = 0;
+auto const pointer = nullptr;
+}
+#endif
 extern struct wl_interface       const zxdg_shell_v6_interface;
+struct wl_message   const zxdg_shell_v6_requests[] = {
+    { "destroy", "", placeholder::pointer},
+    { "create_positioner", ".", placeholder::pointer},
+    { "get_xdg_surface", "..", placeholder::pointer},
+    { "pong", ".", placeholder::pointer},
+};
+struct wl_interface const zxdg_shell_v6_interface = {
+    "zxdg_shell_v6", placeholder::version,
+    4, zxdg_shell_v6_requests,
+    placeholder::count, placeholder::pointer,
+};
 class ZxdgShellV6
 {
 protected:
@@ -142,6 +163,20 @@ struct zxdg_shell_v6_interface {
 
 
 extern struct wl_interface       const zxdg_positioner_v6_interface;
+struct wl_message   const zxdg_positioner_v6_requests[] = {
+    { "destroy", "", placeholder::pointer},
+    { "set_size", "..", placeholder::pointer},
+    { "set_anchor_rect", "....", placeholder::pointer},
+    { "set_anchor", ".", placeholder::pointer},
+    { "set_gravity", ".", placeholder::pointer},
+    { "set_constraint_adjustment", ".", placeholder::pointer},
+    { "set_offset", "..", placeholder::pointer},
+};
+struct wl_interface const zxdg_positioner_v6_interface = {
+    "zxdg_positioner_v6", placeholder::version,
+    7, zxdg_positioner_v6_requests,
+    placeholder::count, placeholder::pointer,
+};
 class ZxdgPositionerV6
 {
 protected:
@@ -316,6 +351,18 @@ struct zxdg_positioner_v6_interface {
 
 
 extern struct wl_interface       const zxdg_surface_v6_interface;
+struct wl_message   const zxdg_surface_v6_requests[] = {
+    { "destroy", "", placeholder::pointer},
+    { "get_toplevel", ".", placeholder::pointer},
+    { "get_popup", "...", placeholder::pointer},
+    { "set_window_geometry", "....", placeholder::pointer},
+    { "ack_configure", ".", placeholder::pointer},
+};
+struct wl_interface const zxdg_surface_v6_interface = {
+    "zxdg_surface_v6", placeholder::version,
+    5, zxdg_surface_v6_requests,
+    placeholder::count, placeholder::pointer,
+};
 class ZxdgSurfaceV6
 {
 protected:
@@ -450,6 +497,27 @@ struct zxdg_surface_v6_interface {
 
 
 extern struct wl_interface       const zxdg_toplevel_v6_interface;
+struct wl_message   const zxdg_toplevel_v6_requests[] = {
+    { "destroy", "", placeholder::pointer},
+    { "set_parent", ".", placeholder::pointer},
+    { "set_title", ".", placeholder::pointer},
+    { "set_app_id", ".", placeholder::pointer},
+    { "show_window_menu", "....", placeholder::pointer},
+    { "move", "..", placeholder::pointer},
+    { "resize", "...", placeholder::pointer},
+    { "set_max_size", "..", placeholder::pointer},
+    { "set_min_size", "..", placeholder::pointer},
+    { "set_maximized", "", placeholder::pointer},
+    { "unset_maximized", "", placeholder::pointer},
+    { "set_fullscreen", ".", placeholder::pointer},
+    { "unset_fullscreen", "", placeholder::pointer},
+    { "set_minimized", "", placeholder::pointer},
+};
+struct wl_interface const zxdg_toplevel_v6_interface = {
+    "zxdg_toplevel_v6", placeholder::version,
+    14, zxdg_toplevel_v6_requests,
+    placeholder::count, placeholder::pointer,
+};
 class ZxdgToplevelV6
 {
 protected:
@@ -774,6 +842,15 @@ struct zxdg_toplevel_v6_interface {
 
 
 extern struct wl_interface       const zxdg_popup_v6_interface;
+struct wl_message   const zxdg_popup_v6_requests[] = {
+    { "destroy", "", placeholder::pointer},
+    { "grab", "..", placeholder::pointer},
+};
+struct wl_interface const zxdg_popup_v6_interface = {
+    "zxdg_popup_v6", placeholder::version,
+    2, zxdg_popup_v6_requests,
+    placeholder::count, placeholder::pointer,
+};
 class ZxdgPopupV6
 {
 protected:

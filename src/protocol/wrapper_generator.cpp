@@ -231,6 +231,19 @@ public:
         out << ");\n";
     }
 
+    void emit_message(std::ostream& out, std::string const& indent, std::string const& /*interface*/) const
+    {
+        out << indent <<  "{ \"" << name << "\", \"";
+
+        for (auto const& argument : arguments)
+        {
+            (void)argument; // Need the encoding for argument
+            out << '.';     // TODO
+        }
+
+        out << "\", "/*"&" << interface << */"placeholder::pointer" "},\n";
+    };
+
     // TODO: Decide whether to resolve wl_resource* to wrapped types (ie: Region, Surface, etc).
     void emit_thunk(std::ostream& out, std::string const& indent,
                     std::string const& interface_type, bool is_global) const
@@ -372,6 +385,18 @@ public:
         if (is_extension)
         {
             out << "extern struct wl_interface       const " << wl_name << "_interface;\n";
+            out << "struct wl_message   const " << wl_name << "_requests[] = {\n";
+            for (auto const& method : methods)
+            {
+                method.emit_message(out, "    ", wl_name + "_interface");
+            }
+            out << "};\n";
+
+            out << "struct wl_interface const " << wl_name << "_interface = {\n"
+                << "    \"" << wl_name <<"\", placeholder::version,\n"
+                << "    " << methods.size() << ", " << wl_name << "_requests,\n"
+                << "    placeholder::count, placeholder::pointer,\n"
+                << "};\n";
         }
 
         out << "class " << generated_name << std::endl;
@@ -558,6 +583,19 @@ int main(int argc, char** argv)
     std::cout << "{" << std::endl;
     std::cout << "namespace wayland" << std::endl;
     std::cout << "{" << std::endl;
+
+    // *****************************************************************************
+    // TODO This needs to be removed as we implement the code that uses it correctly
+    std::cout << "#ifndef MIR_TODO_WAYLAND_PLACEHOLDERS\n";
+    std::cout << "#define MIR_TODO_WAYLAND_PLACEHOLDERS\n";
+    std::cout << "// placeholders for stuff still I need to do correctly\n";
+    std::cout << "namespace placeholder\n {\n";
+    std::cout << "auto const version = 1;\n";
+    std::cout << "auto const count = 0;\n";
+    std::cout << "auto const pointer = nullptr;\n";
+    std::cout << "}\n";
+    std::cout << "#endif\n";
+    // *****************************************************************************
 
     for (auto top_level : root_node->get_children("interface"))
     {
