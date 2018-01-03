@@ -26,3 +26,17 @@ add_custom_target(refresh-wayland-wrapper
   SOURCES ${GENERATED_HEADER}
 )
 
+get_filename_component(
+  XDG_SHELL_HEADER src/server/frontend/wayland/xdg_shell_generated_interfaces.h
+  ABSOLUTE
+  BASE_DIR ${PROJECT_SOURCE_DIR}
+)
+
+add_custom_target(refresh-wayland-xdg-wrapper
+  COMMAND "sh" "-c" "${CMAKE_BINARY_DIR}/bin/wrapper-generator wl_ /usr/share/wayland-protocols/unstable/xdg-shell/xdg-shell-unstable-v6.xml >${XDG_SHELL_HEADER}"
+  VERBATIM
+  DEPENDS wrapper-generator
+  DEPENDS /usr/share/wayland-protocols/unstable/xdg-shell/xdg-shell-unstable-v6.xml
+  SOURCES ${XDG_SHELL_HEADER}
+)
+

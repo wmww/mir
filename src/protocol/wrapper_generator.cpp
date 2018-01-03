@@ -218,6 +218,19 @@ public:
         out << ") = 0;" << std::endl;
     }
 
+    void emit_vtab_declarator(std::ostream& out, std::string const& indent, bool is_global) const
+    {
+        out << indent <<  "  void (*" << name << ")("
+            << "struct wl_client*" << (is_global ? " client" : "")
+            << ", struct wl_resource* resource";
+        for (auto const& arg : arguments)
+        {
+            out << ", ";
+            arg.emit_c_prototype(out);
+        }
+        out << ");\n";
+    }
+
     // TODO: Decide whether to resolve wl_resource* to wrapped types (ie: Region, Surface, etc).
     void emit_thunk(std::ostream& out, std::string const& indent,
                     std::string const& interface_type, bool is_global) const
@@ -356,6 +369,11 @@ public:
 
     void emit_class(std::ostream& out)
     {
+        if (is_extension)
+        {
+            out << "extern struct wl_interface       const " << wl_name << "_interface;\n";
+        }
+
         out << "class " << generated_name << std::endl;
         out << "{" << std::endl;
         out << "protected:" << std::endl;
@@ -422,12 +440,26 @@ public:
 
         if (!methods.empty())
         {
-            out << "struct " << wl_name << "_interface const " << generated_name << "::vtable = {" << std::endl;
+            if (is_extension)
+            {
+                out << "struct " << wl_name << "_interface {\n";
+                for (auto const& method : methods)
+                {
+                    method.emit_vtab_declarator(out, "    ", is_global);
+                }
+
+                out << "} const " << generated_name << "::vtable = {\n";
+            }
+            else
+            {
+                out << "struct " << wl_name << "_interface const " << generated_name << "::vtable = {" << std::endl;
+            }
+
             for (auto const& method : methods)
             {
                 method.emit_vtable_initialiser(out, "    ");
             }
-            out << "};" << std::endl;
+            out << "};\n";
         }
     }
 
@@ -442,7 +474,7 @@ private:
         out << indent << "                          this, &" << generated_name << "::bind))" << std::endl;
         out << indent << "    {" << std::endl;
         out << indent << "        BOOST_THROW_EXCEPTION((std::runtime_error{\"Failed to export "
-                      << wl_name << " interface\"}));" << std::endl;
+            << wl_name << " interface\"}));" << std::endl;
         out << indent << "    }" << std::endl;
         out << indent << "}" << std::endl;
     }
@@ -465,7 +497,7 @@ private:
         if (has_vtable)
         {
             emit_indented_lines(out, indent + "    ",
-                {{ "wl_resource_set_implementation(resource, &vtable, this, &resource_destroyed_thunk);" }});
+                                {{ "wl_resource_set_implementation(resource, &vtable, this, &resource_destroyed_thunk);" }});
         }
         emit_indented_lines(out, indent, {
             { "}" }
@@ -475,6 +507,7 @@ private:
     std::string const wl_name;
     std::string const generated_name;
     bool const is_global;
+    bool const is_extension = wl_name.substr(0,3) != "wl_"; // This huristic works for now
     std::vector<Method> methods;
 };
 
