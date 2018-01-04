@@ -253,7 +253,7 @@ public:
         out << ");\n";
     }
 
-    void emit_message(std::ostream& out, std::string const& indent, std::string const& /*interface*/) const
+    void emit_message(std::ostream& out, std::string const& indent, std::string const& interface) const
     {
         out << indent <<  "{ \"" << name << "\", \"";
 
@@ -262,7 +262,7 @@ public:
             argument.emit_type(out);
         }
 
-        out << "\", "/*"&" << interface << */"placeholder::pointer" "},\n";
+        out << "\", " << interface << "},\n";
     };
 
     // TODO: Decide whether to resolve wl_resource* to wrapped types (ie: Region, Surface, etc).
@@ -407,10 +407,14 @@ public:
         if (is_extension)
         {
             out << "extern struct wl_interface       const " << wl_name << "_interface;\n";
+            out << "struct wl_interface const* " << wl_name << "_types[] = {\n";
+            out << "    &" << wl_name << "_interface\n";
+            out << "};\n";
+
             out << "struct wl_message   const " << wl_name << "_requests[] = {\n";
             for (auto const& method : methods)
             {
-                method.emit_message(out, "    ", wl_name + "_interface");
+                method.emit_message(out, "    ", wl_name + "_types");
             }
             out << "};\n";
 
