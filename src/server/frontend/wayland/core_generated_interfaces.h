@@ -26,7 +26,6 @@ namespace wayland
 // placeholders for stuff still I need to do correctly
 namespace placeholder
  {
-auto const version = 1;
 auto const count = 0;
 auto const pointer = nullptr;
 }

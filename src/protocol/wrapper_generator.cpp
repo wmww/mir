@@ -333,6 +333,7 @@ public:
         std::unordered_set<std::string> const& constructable_interfaces)
         : wl_name{node.get_attribute_value("name")},
           generated_name{name_transform(wl_name)},
+          version{node.get_attribute_value("version")},
           is_global{constructable_interfaces.count(wl_name) == 0}
     {
         for (auto method_node : node.get_children("request"))
@@ -393,7 +394,7 @@ public:
             out << "};\n";
 
             out << "struct wl_interface const " << wl_name << "_interface = {\n"
-                << "    \"" << wl_name <<"\", placeholder::version,\n"
+                << "    \"" << wl_name <<"\", " << version << ",\n"
                 << "    " << methods.size() << ", " << wl_name << "_requests,\n"
                 << "    placeholder::count, placeholder::pointer,\n"
                 << "};\n";
@@ -531,6 +532,7 @@ private:
 
     std::string const wl_name;
     std::string const generated_name;
+    std::string const version;
     bool const is_global;
     bool const is_extension = wl_name.substr(0,3) != "wl_"; // This huristic works for now
     std::vector<Method> methods;
@@ -590,7 +592,6 @@ int main(int argc, char** argv)
     std::cout << "#define MIR_TODO_WAYLAND_PLACEHOLDERS\n";
     std::cout << "// placeholders for stuff still I need to do correctly\n";
     std::cout << "namespace placeholder\n {\n";
-    std::cout << "auto const version = 1;\n";
     std::cout << "auto const count = 0;\n";
     std::cout << "auto const pointer = nullptr;\n";
     std::cout << "}\n";

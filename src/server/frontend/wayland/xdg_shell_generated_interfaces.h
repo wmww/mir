@@ -26,7 +26,6 @@ namespace wayland
 // placeholders for stuff still I need to do correctly
 namespace placeholder
  {
-auto const version = 1;
 auto const count = 0;
 auto const pointer = nullptr;
 }
@@ -39,7 +38,7 @@ struct wl_message   const zxdg_shell_v6_requests[] = {
     { "pong", ".", placeholder::pointer},
 };
 struct wl_interface const zxdg_shell_v6_interface = {
-    "zxdg_shell_v6", placeholder::version,
+    "zxdg_shell_v6", 1,
     4, zxdg_shell_v6_requests,
     placeholder::count, placeholder::pointer,
 };
@@ -173,7 +172,7 @@ struct wl_message   const zxdg_positioner_v6_requests[] = {
     { "set_offset", "..", placeholder::pointer},
 };
 struct wl_interface const zxdg_positioner_v6_interface = {
-    "zxdg_positioner_v6", placeholder::version,
+    "zxdg_positioner_v6", 1,
     7, zxdg_positioner_v6_requests,
     placeholder::count, placeholder::pointer,
 };
@@ -359,7 +358,7 @@ struct wl_message   const zxdg_surface_v6_requests[] = {
     { "ack_configure", ".", placeholder::pointer},
 };
 struct wl_interface const zxdg_surface_v6_interface = {
-    "zxdg_surface_v6", placeholder::version,
+    "zxdg_surface_v6", 1,
     5, zxdg_surface_v6_requests,
     placeholder::count, placeholder::pointer,
 };
@@ -514,7 +513,7 @@ struct wl_message   const zxdg_toplevel_v6_requests[] = {
     { "set_minimized", "", placeholder::pointer},
 };
 struct wl_interface const zxdg_toplevel_v6_interface = {
-    "zxdg_toplevel_v6", placeholder::version,
+    "zxdg_toplevel_v6", 1,
     14, zxdg_toplevel_v6_requests,
     placeholder::count, placeholder::pointer,
 };
@@ -847,7 +846,7 @@ struct wl_message   const zxdg_popup_v6_requests[] = {
     { "grab", "..", placeholder::pointer},
 };
 struct wl_interface const zxdg_popup_v6_interface = {
-    "zxdg_popup_v6", placeholder::version,
+    "zxdg_popup_v6", 1,
     2, zxdg_popup_v6_requests,
     placeholder::count, placeholder::pointer,
 };
