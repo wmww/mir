@@ -33,9 +33,9 @@ auto const pointer = nullptr;
 extern struct wl_interface       const zxdg_shell_v6_interface;
 struct wl_message   const zxdg_shell_v6_requests[] = {
     { "destroy", "", placeholder::pointer},
-    { "create_positioner", ".", placeholder::pointer},
-    { "get_xdg_surface", "..", placeholder::pointer},
-    { "pong", ".", placeholder::pointer},
+    { "create_positioner", "n", placeholder::pointer},
+    { "get_xdg_surface", "no", placeholder::pointer},
+    { "pong", "u", placeholder::pointer},
 };
 struct wl_interface const zxdg_shell_v6_interface = {
     "zxdg_shell_v6", 1,
@@ -164,12 +164,12 @@ struct zxdg_shell_v6_interface {
 extern struct wl_interface       const zxdg_positioner_v6_interface;
 struct wl_message   const zxdg_positioner_v6_requests[] = {
     { "destroy", "", placeholder::pointer},
-    { "set_size", "..", placeholder::pointer},
-    { "set_anchor_rect", "....", placeholder::pointer},
-    { "set_anchor", ".", placeholder::pointer},
-    { "set_gravity", ".", placeholder::pointer},
-    { "set_constraint_adjustment", ".", placeholder::pointer},
-    { "set_offset", "..", placeholder::pointer},
+    { "set_size", "ii", placeholder::pointer},
+    { "set_anchor_rect", "iiii", placeholder::pointer},
+    { "set_anchor", "u", placeholder::pointer},
+    { "set_gravity", "u", placeholder::pointer},
+    { "set_constraint_adjustment", "u", placeholder::pointer},
+    { "set_offset", "ii", placeholder::pointer},
 };
 struct wl_interface const zxdg_positioner_v6_interface = {
     "zxdg_positioner_v6", 1,
@@ -352,10 +352,10 @@ struct zxdg_positioner_v6_interface {
 extern struct wl_interface       const zxdg_surface_v6_interface;
 struct wl_message   const zxdg_surface_v6_requests[] = {
     { "destroy", "", placeholder::pointer},
-    { "get_toplevel", ".", placeholder::pointer},
-    { "get_popup", "...", placeholder::pointer},
-    { "set_window_geometry", "....", placeholder::pointer},
-    { "ack_configure", ".", placeholder::pointer},
+    { "get_toplevel", "n", placeholder::pointer},
+    { "get_popup", "noo", placeholder::pointer},
+    { "set_window_geometry", "iiii", placeholder::pointer},
+    { "ack_configure", "u", placeholder::pointer},
 };
 struct wl_interface const zxdg_surface_v6_interface = {
     "zxdg_surface_v6", 1,
@@ -498,17 +498,17 @@ struct zxdg_surface_v6_interface {
 extern struct wl_interface       const zxdg_toplevel_v6_interface;
 struct wl_message   const zxdg_toplevel_v6_requests[] = {
     { "destroy", "", placeholder::pointer},
-    { "set_parent", ".", placeholder::pointer},
-    { "set_title", ".", placeholder::pointer},
-    { "set_app_id", ".", placeholder::pointer},
-    { "show_window_menu", "....", placeholder::pointer},
-    { "move", "..", placeholder::pointer},
-    { "resize", "...", placeholder::pointer},
-    { "set_max_size", "..", placeholder::pointer},
-    { "set_min_size", "..", placeholder::pointer},
+    { "set_parent", "o", placeholder::pointer},
+    { "set_title", "s", placeholder::pointer},
+    { "set_app_id", "s", placeholder::pointer},
+    { "show_window_menu", "ouii", placeholder::pointer},
+    { "move", "ou", placeholder::pointer},
+    { "resize", "ouu", placeholder::pointer},
+    { "set_max_size", "ii", placeholder::pointer},
+    { "set_min_size", "ii", placeholder::pointer},
     { "set_maximized", "", placeholder::pointer},
     { "unset_maximized", "", placeholder::pointer},
-    { "set_fullscreen", ".", placeholder::pointer},
+    { "set_fullscreen", "o", placeholder::pointer},
     { "unset_fullscreen", "", placeholder::pointer},
     { "set_minimized", "", placeholder::pointer},
 };
@@ -843,7 +843,7 @@ struct zxdg_toplevel_v6_interface {
 extern struct wl_interface       const zxdg_popup_v6_interface;
 struct wl_message   const zxdg_popup_v6_requests[] = {
     { "destroy", "", placeholder::pointer},
-    { "grab", "..", placeholder::pointer},
+    { "grab", "ou", placeholder::pointer},
 };
 struct wl_interface const zxdg_popup_v6_interface = {
     "zxdg_popup_v6", 1,

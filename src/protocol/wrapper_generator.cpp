@@ -144,6 +144,7 @@ class Argument
 public:
     Argument(xmlpp::Element const& node)
         : name{node.get_attribute_value("name")},
+          type{node.get_attribute_value("type")},
           descriptor{parse_optional(node) ? optional_type_map.at(node.get_attribute_value("type"))
                                           : type_map.at(node.get_attribute_value("type"))}
     {
@@ -160,6 +161,25 @@ public:
     void emit_thunk_call_fragment(std::ostream& out) const
     {
         out << (descriptor.converter ? (name + "_resolved") : name);
+    }
+    void emit_type(std::ostream& out) const
+    {
+        if (type == "int")
+            out << "i";
+        else if (type == "uint")
+            out << "u";
+        else if (type == "fixed")
+            out <<"f";
+        else if (type == "string")
+            out <<"s";
+        else if (type == "array")
+            out <<"a";
+        else if (type == "fd")
+            out <<"h";
+        else if (type == "new_id")
+            out <<"n";
+        else if (type == "object")
+            out <<"o";
     }
 
     void emit_thunk_converter(std::ostream& out, std::string const& indent) const
@@ -178,7 +198,9 @@ public:
     }
 
 private:
+
     std::string const name;
+    std::string const type;
     ArgumentTypeDescriptor const& descriptor;
 };
 
@@ -237,8 +259,7 @@ public:
 
         for (auto const& argument : arguments)
         {
-            (void)argument; // Need the encoding for argument
-            out << '.';     // TODO
+            argument.emit_type(out);
         }
 
         out << "\", "/*"&" << interface << */"placeholder::pointer" "},\n";
