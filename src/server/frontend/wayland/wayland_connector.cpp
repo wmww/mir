@@ -2051,6 +2051,236 @@ private:
     std::shared_ptr<mf::Shell> const shell;
     WlSeat& seat;
 };
+
+struct ZxdgPositionerV6 : wayland::ZxdgPositionerV6
+{
+    ZxdgPositionerV6(struct wl_client* client, struct wl_resource* parent, uint32_t id) :
+        wayland::ZxdgPositionerV6(client, parent, id)
+    {
+    }
+
+    void destroy() override
+    {
+        // TODO
+    }
+
+    void set_size(int32_t width, int32_t height) override
+    {
+        (void)width, (void)height;
+        // TODO
+    }
+
+    void set_anchor_rect(int32_t x, int32_t y, int32_t width, int32_t height) override
+    {
+        (void)x, (void)y, (void)width, (void)height;
+        // TODO
+    }
+
+    void set_anchor(uint32_t anchor) override
+    {
+        (void)anchor;
+        // TODO
+    }
+
+    void set_gravity(uint32_t gravity) override
+    {
+        (void)gravity;
+        // TODO
+    }
+
+    void set_constraint_adjustment(uint32_t constraint_adjustment) override
+    {
+        (void)constraint_adjustment;
+        // TODO
+    }
+
+    void set_offset(int32_t x, int32_t y) override
+    {
+        (void)x, (void)y;
+        // TODO
+    }
+};
+
+struct ZxdgToplevelV6 : wayland::ZxdgToplevelV6
+{
+    ZxdgToplevelV6(struct wl_client* client, struct wl_resource* parent, uint32_t id) :
+        wayland::ZxdgToplevelV6(client, parent, id)
+    {
+    }
+
+    void destroy() override
+    {
+        // TODO
+    }
+
+    void set_parent(std::experimental::optional<struct wl_resource*> const& parent) override
+    {
+        (void)parent;
+        // TODO
+    }
+
+    void set_title(std::string const& title) override
+    {
+        (void)title;
+        // TODO
+    }
+
+    void set_app_id(std::string const& app_id) override
+    {
+        (void)app_id;
+        // TODO
+    }
+
+    void show_window_menu(struct wl_resource* seat, uint32_t serial, int32_t x, int32_t y) override
+    {
+        (void)seat, (void)serial, (void)x, (void)y;
+        // TODO
+    }
+
+    void move(struct wl_resource* seat, uint32_t serial) override
+    {
+        (void)seat, (void)serial;
+        // TODO
+    }
+
+    void resize(struct wl_resource* seat, uint32_t serial, uint32_t edges) override
+    {
+        (void)seat, (void)serial, (void)edges;
+        // TODO
+    }
+
+    void set_max_size(int32_t width, int32_t height) override
+    {
+        (void)width, (void)height;
+        // TODO
+    }
+
+    void set_min_size(int32_t width, int32_t height) override
+    {
+        (void)width, (void)height;
+        // TODO
+    }
+
+    void set_maximized() override
+    {
+        // TODO
+    }
+
+    void unset_maximized() override
+    {
+        // TODO
+    }
+
+    void set_fullscreen(std::experimental::optional<struct wl_resource*> const& output) override
+    {
+        (void)output;
+        // TODO
+    }
+
+    void unset_fullscreen() override
+    {
+        // TODO
+    }
+
+    void set_minimized() override
+    {
+        // TODO
+    }
+};
+
+struct ZxdgPopupV6 : wayland::ZxdgPopupV6
+{
+    ZxdgPopupV6(struct wl_client* client, struct wl_resource* parent, uint32_t id) :
+        wayland::ZxdgPopupV6(client, parent, id)
+    {
+    }
+
+    void grab(struct wl_resource* seat, uint32_t serial) override
+    {
+        (void)seat, (void)serial;
+        // TODO
+    }
+
+    void destroy() override
+    {
+        // TODO
+    }
+};
+
+struct ZxdgSurfaceV6 : wayland::ZxdgSurfaceV6
+{
+    ZxdgSurfaceV6(struct wl_client* client, struct wl_resource* parent, uint32_t id) :
+        wayland::ZxdgSurfaceV6(client, parent, id),
+        client{client},
+        parent{parent}
+    {
+    }
+
+    void destroy() override
+    {
+        // TODO
+    }
+
+    void get_toplevel(uint32_t id) override
+    {
+        new ZxdgToplevelV6{client, parent, id};
+    }
+
+    void get_popup(uint32_t id, struct wl_resource* parent, struct wl_resource* positioner) override
+    {
+        (void)positioner;
+        new ZxdgPopupV6{client, parent, id};
+    }
+
+    void set_window_geometry(int32_t x, int32_t y, int32_t width, int32_t height) override
+    {
+        (void)x, (void)y, (void)width, (void)height;
+        // TODO
+    }
+
+    void ack_configure(uint32_t serial) override
+    {
+        (void)serial;
+        // TODO
+    }
+
+    struct wl_client* const client;
+    struct wl_resource* const parent;
+};
+
+struct ZxdgShellV6 : wayland::ZxdgShellV6
+{
+    ZxdgShellV6(struct wl_display* display, uint32_t max_version) :
+        wayland::ZxdgShellV6(display, max_version)
+    {
+    }
+
+    void destroy(struct wl_client* client, struct wl_resource* resource) override
+    {
+        (void)client, (void)resource;
+        // TODO
+    }
+
+    void create_positioner(struct wl_client* client, struct wl_resource* resource, uint32_t id) override
+    {
+        new ZxdgPositionerV6{client, resource, id};
+    }
+
+    void get_xdg_surface(
+        struct wl_client* client,
+        struct wl_resource* resource,
+        uint32_t id,
+        struct wl_resource* /*surface*/) override
+    {
+        new ZxdgSurfaceV6{client, resource, id/*, surface*/};
+    }
+
+    void pong(struct wl_client* client, struct wl_resource* resource, uint32_t serial) override
+    {
+        (void)client, (void)resource, (void)serial;
+        // TODO
+    }
+};
 }
 }
 
@@ -2263,6 +2493,7 @@ mf::WaylandConnector::WaylandConnector(
         display.get(),
         display_config);
     shell_global = std::make_unique<mf::WlShell>(display.get(), shell, *seat_global);
+    xdg_shell_global = std::make_unique<mf::ZxdgShellV6>(display.get(), wayland::zxdg_shell_v6_interface.version);
 
     wl_display_init_shm(display.get());
 
