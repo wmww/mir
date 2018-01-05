@@ -106,7 +106,9 @@ std::unordered_map<std::string, ArgumentTypeDescriptor const> type_map = {
     { "fd", { "mir::Fd", "int", { fd_converter }}},
     { "object", { "struct wl_resource*", "struct wl_resource*", {} }},
     { "string", { "std::string const&", "char const*", {} }},
-    { "new_id", { "uint32_t", "uint32_t", {} }}
+    { "new_id", { "uint32_t", "uint32_t", {} }},
+    { "array", { "struct wl_array *", "struct wl_array *", {} }},
+    { "fixed", { "wl_fixed_t", "wl_fixed_t", {} }}
 };
 
 std::unordered_map<std::string, ArgumentTypeDescriptor const> optional_type_map = {
@@ -362,6 +364,11 @@ public:
             auto method = dynamic_cast<xmlpp::Element*>(method_node);
             methods.emplace_back(std::ref(*method));
         }
+        for (auto event_node : node.get_children("event"))
+        {
+            auto event = dynamic_cast<xmlpp::Element*>(event_node);
+            events.emplace_back(std::ref(*event));
+        }
     }
 
     void emit_constructor(std::ostream& out, std::string const& indent, bool has_vtable)
@@ -411,18 +418,48 @@ public:
             out << "    &" << wl_name << "_interface\n";
             out << "};\n";
 
-            out << "struct wl_message   const " << wl_name << "_requests[] = {\n";
-            for (auto const& method : methods)
+            if (!methods.empty())
             {
-                method.emit_message(out, "    ", wl_name + "_types");
+                out << "struct wl_message   const " << wl_name << "_requests[] = {\n";
+                for (auto const& method : methods)
+                {
+                    method.emit_message(out, "    ", wl_name + "_types");
+                }
+                out << "};\n";
             }
-            out << "};\n";
+
+            if (!events.empty())
+            {
+                out << "struct wl_message   const " << wl_name << "_events[] = {\n";
+                for (auto const& event : events)
+                {
+                    event.emit_message(out, "    ", wl_name + "_types");
+                }
+                out << "};\n";
+            }
 
             out << "struct wl_interface const " << wl_name << "_interface = {\n"
-                << "    \"" << wl_name <<"\", " << version << ",\n"
-                << "    " << methods.size() << ", " << wl_name << "_requests,\n"
-                << "    placeholder::count, placeholder::pointer,\n"
-                << "};\n";
+                << "    \"" << wl_name <<"\", " << version << ",\n";
+
+            if (!methods.empty())
+            {
+                out << "    " << methods.size() << ", " << wl_name << "_requests,\n";
+            }
+            else
+            {
+                out << "    0, nullptr,\n";
+            }
+
+            if (!events.empty())
+            {
+                out << "    " << events.size() << ", " << wl_name << "_events,\n";
+            }
+            else
+            {
+                out << "    0, nullptr,\n";
+            }
+
+            out << "};\n";
         }
 
         out << "class " << generated_name << std::endl;
@@ -561,6 +598,7 @@ private:
     bool const is_global;
     bool const is_extension = wl_name.substr(0,3) != "wl_"; // This huristic works for now
     std::vector<Method> methods;
+    std::vector<Method> events;
 };
 
 int main(int argc, char** argv)
@@ -610,18 +648,6 @@ int main(int argc, char** argv)
     std::cout << "{" << std::endl;
     std::cout << "namespace wayland" << std::endl;
     std::cout << "{" << std::endl;
-
-    // *****************************************************************************
-    // TODO This needs to be removed as we implement the code that uses it correctly
-    std::cout << "#ifndef MIR_TODO_WAYLAND_PLACEHOLDERS\n";
-    std::cout << "#define MIR_TODO_WAYLAND_PLACEHOLDERS\n";
-    std::cout << "// placeholders for stuff still I need to do correctly\n";
-    std::cout << "namespace placeholder\n {\n";
-    std::cout << "auto const count = 0;\n";
-    std::cout << "auto const pointer = nullptr;\n";
-    std::cout << "}\n";
-    std::cout << "#endif\n";
-    // *****************************************************************************
 
     for (auto top_level : root_node->get_children("interface"))
     {
