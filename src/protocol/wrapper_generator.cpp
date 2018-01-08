@@ -147,6 +147,8 @@ public:
     Argument(xmlpp::Element const& node)
         : name{node.get_attribute_value("name")},
           type{node.get_attribute_value("type")},
+          interface{node.get_attribute_value("interface")},
+          allow_null{node.get_attribute_value("allow-null") == "true"},
           descriptor{parse_optional(node) ? optional_type_map.at(node.get_attribute_value("type"))
                                           : type_map.at(node.get_attribute_value("type"))}
     {
@@ -166,6 +168,9 @@ public:
     }
     void emit_type(std::ostream& out) const
     {
+        if (allow_null)
+            out << "?";
+
         if (type == "int")
             out << "i";
         else if (type == "uint")
@@ -182,6 +187,24 @@ public:
             out <<"n";
         else if (type == "object")
             out <<"o";
+    }
+
+    void emit_interface(std::ostream& out, std::string const& indent) const
+    {
+        out << indent;
+
+        if (type == "new_id" || type == "object")
+            out << "&" << interface << "_interface,\n";
+        else
+            out << "nullptr,\n";
+    }
+
+    void declare_interface(std::ostream& out) const
+    {
+        if ((type == "new_id" || type == "object") && interface.substr(0,3) != "wl_")
+        {
+            out << "extern struct wl_interface       const " << interface<< "_interface;\n";
+        }
     }
 
     void emit_thunk_converter(std::ostream& out, std::string const& indent) const
@@ -203,6 +226,8 @@ private:
 
     std::string const name;
     std::string const type;
+    std::string const interface;
+    bool allow_null;
     ArgumentTypeDescriptor const& descriptor;
 };
 
@@ -255,7 +280,7 @@ public:
         out << ");\n";
     }
 
-    void emit_message(std::ostream& out, std::string const& indent, std::string const& interface) const
+    void emit_message(std::ostream& out, std::string const& indent, std::string const& wl_name) const
     {
         out << indent <<  "{ \"" << name << "\", \"";
 
@@ -264,8 +289,31 @@ public:
             argument.emit_type(out);
         }
 
-        out << "\", " << interface << "},\n";
+        out << "\", " << wl_name + "_" + name + "_types" << "},\n";
     };
+
+    void emit_interfaces(std::ostream& out, std::string const& wl_name) const
+    {
+        for (auto const& argument : arguments)
+        {
+            argument.declare_interface(out);
+        }
+
+        out << "struct wl_interface const* " << wl_name + "_" + name + "_types[] = {\n";
+
+        if (!arguments.empty())
+        {
+            for (auto const& argument : arguments)
+            {
+                argument.emit_interface(out, "    ");
+            }
+        }
+        else
+        {
+            out << "    nullptr\n";
+        }
+        out << "};\n";
+    }
 
     // TODO: Decide whether to resolve wl_resource* to wrapped types (ie: Region, Surface, etc).
     void emit_thunk(std::ostream& out, std::string const& indent,
@@ -342,8 +390,8 @@ public:
         out << indent << name << "_thunk," << std::endl;
     }
 
-private:
     std::string const name;
+private:
     std::vector<Argument> arguments;
 };
 
@@ -414,26 +462,33 @@ public:
         if (is_extension)
         {
             out << "extern struct wl_interface       const " << wl_name << "_interface;\n";
-            out << "struct wl_interface const* " << wl_name << "_types[] = {\n";
-            out << "    &" << wl_name << "_interface\n";
-            out << "};\n";
 
             if (!methods.empty())
             {
+                for (auto const& method : methods)
+                {
+                    method.emit_interfaces(out, wl_name);
+                }
+
                 out << "struct wl_message   const " << wl_name << "_requests[] = {\n";
                 for (auto const& method : methods)
                 {
-                    method.emit_message(out, "    ", wl_name + "_types");
+                    method.emit_message(out, "    ", wl_name);
                 }
                 out << "};\n";
             }
 
             if (!events.empty())
             {
+                for (auto const& event : events)
+                {
+                    event.emit_interfaces(out, wl_name);
+                }
+
                 out << "struct wl_message   const " << wl_name << "_events[] = {\n";
                 for (auto const& event : events)
                 {
-                    event.emit_message(out, "    ", wl_name + "_types");
+                    event.emit_message(out, "    ", wl_name);
                 }
                 out << "};\n";
             }
