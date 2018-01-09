@@ -87,6 +87,34 @@ namespace geom = mir::geometry;
 namespace mcl = mir::client;
 namespace mi = mir::input;
 
+namespace
+{
+struct arg_trace
+{
+    arg_trace(char const* pretty_function, void* self) : pretty_function{pretty_function}, self{self}
+    {
+        printf("**************************** this=%p : entering %s\n", self, pretty_function);
+    }
+
+    ~arg_trace()
+    {
+        printf("**************************** this=%p : exiting  %s\n", self, pretty_function);
+    }
+
+    char const* const pretty_function;
+    void* const self;
+};
+}
+
+#define ARG_MERGE(a,b)  a##b
+#define ARG_LABEL(a) ARG_MERGE(unique_name_, a)
+#define ARG_UNIQUE_NAME ARG_LABEL(__LINE__)
+#define ARG_TRACE arg_trace ARG_UNIQUE_NAME{__PRETTY_FUNCTION__, this}
+
+#define ARG_TRACE_CREATE  printf("**************************** this=%p : %s\n", static_cast<void*>(this), __PRETTY_FUNCTION__)
+#define ARG_TRACE_DESTROY printf("**************************** this=%p : %s\n", static_cast<void*>(this), __PRETTY_FUNCTION__)
+
+
 namespace mir
 {
 namespace frontend
@@ -591,6 +619,7 @@ public:
           pending_frames{std::make_shared<std::vector<wl_resource*>>()},
           destroyed{std::make_shared<bool>(false)}
     {
+        ARG_TRACE_CREATE;
         auto session = session_for_client(client);
         mg::BufferProperties const props{
             geom::Size{geom::Width{0}, geom::Height{0}},
@@ -607,6 +636,7 @@ public:
 
     ~WlSurface()
     {
+        ARG_TRACE_DESTROY;
         *destroyed = true;
         if (auto session = session_for_client(client))
             session->destroy_buffer_stream(stream_id);
@@ -614,11 +644,13 @@ public:
 
     void set_resize_handler(std::function<void(geom::Size)> const& handler)
     {
+        ARG_TRACE;
         resize_handler = handler;
     }
 
     void set_hide_handler(std::function<void()> const& handler)
     {
+        ARG_TRACE;
         hide_handler = handler;
     }
 
@@ -649,11 +681,13 @@ private:
 
 void WlSurface::destroy()
 {
+    ARG_TRACE;
     wl_resource_destroy(resource);
 }
 
 void WlSurface::attach(std::experimental::optional<wl_resource*> const& buffer, int32_t x, int32_t y)
 {
+    ARG_TRACE;
     if (x != 0 || y != 0)
     {
         mir::log_warning("Client requested unimplemented non-zero attach offset. Rendering will be incorrect.");
@@ -669,6 +703,7 @@ void WlSurface::attach(std::experimental::optional<wl_resource*> const& buffer, 
 
 void WlSurface::damage(int32_t x, int32_t y, int32_t width, int32_t height)
 {
+    ARG_TRACE;
     (void)x;
     (void)y;
     (void)width;
@@ -677,6 +712,7 @@ void WlSurface::damage(int32_t x, int32_t y, int32_t width, int32_t height)
 
 void WlSurface::damage_buffer(int32_t x, int32_t y, int32_t width, int32_t height)
 {
+    ARG_TRACE;
     (void)x;
     (void)y;
     (void)width;
@@ -685,22 +721,26 @@ void WlSurface::damage_buffer(int32_t x, int32_t y, int32_t width, int32_t heigh
 
 void WlSurface::frame(uint32_t callback)
 {
+    ARG_TRACE;
     pending_frames->emplace_back(
         wl_resource_create(client, &wl_callback_interface, 1, callback));
 }
 
 void WlSurface::set_opaque_region(const std::experimental::optional<wl_resource*>& region)
 {
+    ARG_TRACE;
     (void)region;
 }
 
 void WlSurface::set_input_region(const std::experimental::optional<wl_resource*>& region)
 {
+    ARG_TRACE;
     (void)region;
 }
 
 void WlSurface::commit()
 {
+    ARG_TRACE;
     if (pending_buffer)
     {
         auto send_frame_notifications =
@@ -777,11 +817,13 @@ void WlSurface::commit()
 
 void WlSurface::set_buffer_transform(int32_t transform)
 {
+    ARG_TRACE;
     (void)transform;
 }
 
 void WlSurface::set_buffer_scale(int32_t scale)
 {
+    ARG_TRACE;
     (void)scale;
 }
 
@@ -817,17 +859,21 @@ public:
     Region(wl_client* client, wl_resource* parent, uint32_t id)
         : wayland::Region(client, parent, id)
     {
+        ARG_TRACE;
     }
 protected:
 
     void destroy() override
     {
+        ARG_TRACE;
     }
     void add(int32_t /*x*/, int32_t /*y*/, int32_t /*width*/, int32_t /*height*/) override
     {
+        ARG_TRACE;
     }
     void subtract(int32_t /*x*/, int32_t /*y*/, int32_t /*width*/, int32_t /*height*/) override
     {
+        ARG_TRACE;
     }
 
 };
@@ -1525,9 +1571,6 @@ private:
     }
     static void get_keyboard(wl_client* client, wl_resource* resource, uint32_t id)
     {
-        puts("*****************************************************************************************");
-        puts(__PRETTY_FUNCTION__);
-        puts("*****************************************************************************************");
         auto me = reinterpret_cast<WlSeat*>(wl_resource_get_user_data(resource));
         auto& input_ctx = me->keyboard[client];
 
@@ -1961,23 +2004,17 @@ protected:
 
     void move(struct wl_resource* /*seat*/, uint32_t /*serial*/) override
     {
-        puts("*****************************************************************************************");
-        puts(__PRETTY_FUNCTION__);
-        puts("*****************************************************************************************");
+        ARG_TRACE;
     }
 
     void resize(struct wl_resource* /*seat*/, uint32_t /*serial*/, uint32_t /*edges*/) override
     {
-        puts("*****************************************************************************************");
-        puts(__PRETTY_FUNCTION__);
-        puts("*****************************************************************************************");
+        ARG_TRACE;
     }
 
     void set_toplevel() override
     {
-        puts("*****************************************************************************************");
-        puts(__PRETTY_FUNCTION__);
-        puts("*****************************************************************************************");
+        ARG_TRACE;
     }
 
     void set_transient(
@@ -1986,9 +2023,7 @@ protected:
         int32_t /*y*/,
         uint32_t /*flags*/) override
     {
-        puts("*****************************************************************************************");
-        puts(__PRETTY_FUNCTION__);
-        puts("*****************************************************************************************");
+        ARG_TRACE;
     }
 
     void set_fullscreen(
@@ -2015,9 +2050,7 @@ protected:
         int32_t /*y*/,
         uint32_t /*flags*/) override
     {
-        puts("*****************************************************************************************");
-        puts(__PRETTY_FUNCTION__);
-        puts("*****************************************************************************************");
+        ARG_TRACE;
     }
 
     void set_maximized(std::experimental::optional<struct wl_resource*> const& output) override
@@ -2034,16 +2067,12 @@ protected:
 
     void set_title(std::string const& /*title*/) override
     {
-        puts("*****************************************************************************************");
-        puts(__PRETTY_FUNCTION__);
-        puts("*****************************************************************************************");
+        ARG_TRACE;
     }
 
     void set_class(std::string const& /*class_*/) override
     {
-        puts("*****************************************************************************************");
-        puts(__PRETTY_FUNCTION__);
-        puts("*****************************************************************************************");
+        ARG_TRACE;
     }
 private:
     std::shared_ptr<bool> const destroyed;
@@ -2082,71 +2111,55 @@ struct ZxdgPositionerV6 : wayland::ZxdgPositionerV6
     ZxdgPositionerV6(struct wl_client* client, struct wl_resource* parent, uint32_t id) :
         wayland::ZxdgPositionerV6(client, parent, id)
     {
-        puts("*****************************************************************************************");
-        puts(__PRETTY_FUNCTION__);
-        puts("*****************************************************************************************");
+        ARG_TRACE;
     }
 
     void destroy() override
     {
         // TODO
-        puts("*****************************************************************************************");
-        puts(__PRETTY_FUNCTION__);
-        puts("*****************************************************************************************");
+        ARG_TRACE;
     }
 
     void set_size(int32_t width, int32_t height) override
     {
         (void)width, (void)height;
         // TODO
-        puts("*****************************************************************************************");
-        puts(__PRETTY_FUNCTION__);
-        puts("*****************************************************************************************");
+        ARG_TRACE;
     }
 
     void set_anchor_rect(int32_t x, int32_t y, int32_t width, int32_t height) override
     {
         (void)x, (void)y, (void)width, (void)height;
         // TODO
-        puts("*****************************************************************************************");
-        puts(__PRETTY_FUNCTION__);
-        puts("*****************************************************************************************");
+        ARG_TRACE;
     }
 
     void set_anchor(uint32_t anchor) override
     {
         (void)anchor;
         // TODO
-        puts("*****************************************************************************************");
-        puts(__PRETTY_FUNCTION__);
-        puts("*****************************************************************************************");
+        ARG_TRACE;
     }
 
     void set_gravity(uint32_t gravity) override
     {
         (void)gravity;
         // TODO
-        puts("*****************************************************************************************");
-        puts(__PRETTY_FUNCTION__);
-        puts("*****************************************************************************************");
+        ARG_TRACE;
     }
 
     void set_constraint_adjustment(uint32_t constraint_adjustment) override
     {
         (void)constraint_adjustment;
         // TODO
-        puts("*****************************************************************************************");
-        puts(__PRETTY_FUNCTION__);
-        puts("*****************************************************************************************");
+        ARG_TRACE;
     }
 
     void set_offset(int32_t x, int32_t y) override
     {
         (void)x, (void)y;
         // TODO
-        puts("*****************************************************************************************");
-        puts(__PRETTY_FUNCTION__);
-        puts("*****************************************************************************************");
+        ARG_TRACE;
     }
 };
 
@@ -2163,30 +2176,10 @@ struct ZxdgToplevelV6 : wayland::ZxdgToplevelV6
     void destroy() override
     {
         // TODO
-        puts("*****************************************************************************************");
-        puts(__PRETTY_FUNCTION__);
-        puts("*****************************************************************************************");
+        ARG_TRACE;
     }
 
-    void set_parent(std::experimental::optional<struct wl_resource*> const& parent) override
-    {
-        shell::SurfaceSpecification new_spec;
-
-        auto const session = session_for_client(client);
-
-        if (parent && parent.value())
-        {
-//            auto* tmp = wl_resource_get_user_data(parent.value());
-//            auto& mir_surface = *static_cast<ZxdgToplevelV6*>(tmp);
-//            new_spec.parent = std::dynamic_pointer_cast<scene::Surface>(session->get_surface(mir_surface.surface_id));
-        }
-        else
-        {
-//            new_spec.parent = std::weak_ptr<scene::Surface>{};
-        }
-
-        shell->modify_surface(session, surface_id, new_spec);
-    }
+    void set_parent(std::experimental::optional<struct wl_resource*> const& parent) override;
 
     void set_title(std::string const& title) override
     {
@@ -2206,27 +2199,21 @@ struct ZxdgToplevelV6 : wayland::ZxdgToplevelV6
     {
         (void)seat, (void)serial, (void)x, (void)y;
         // TODO
-        puts("*****************************************************************************************");
-        puts(__PRETTY_FUNCTION__);
-        puts("*****************************************************************************************");
+        ARG_TRACE;
     }
 
     void move(struct wl_resource* seat, uint32_t serial) override
     {
         (void)seat, (void)serial;
         // TODO
-        puts("*****************************************************************************************");
-        puts(__PRETTY_FUNCTION__);
-        puts("*****************************************************************************************");
+        ARG_TRACE;
     }
 
     void resize(struct wl_resource* seat, uint32_t serial, uint32_t edges) override
     {
         (void)seat, (void)serial, (void)edges;
         // TODO
-        puts("*****************************************************************************************");
-        puts(__PRETTY_FUNCTION__);
-        puts("*****************************************************************************************");
+        ARG_TRACE;
     }
 
     void set_max_size(int32_t width, int32_t height) override
@@ -2267,25 +2254,19 @@ struct ZxdgToplevelV6 : wayland::ZxdgToplevelV6
     {
         (void)output;
         // TODO
-        puts("*****************************************************************************************");
-        puts(__PRETTY_FUNCTION__);
-        puts("*****************************************************************************************");
+        ARG_TRACE;
     }
 
     void unset_fullscreen() override
     {
         // TODO
-        puts("*****************************************************************************************");
-        puts(__PRETTY_FUNCTION__);
-        puts("*****************************************************************************************");
+        ARG_TRACE;
     }
 
     void set_minimized() override
     {
         // TODO
-        puts("*****************************************************************************************");
-        puts(__PRETTY_FUNCTION__);
-        puts("*****************************************************************************************");
+        ARG_TRACE;
     }
 
 private:
@@ -2304,17 +2285,13 @@ struct ZxdgPopupV6 : wayland::ZxdgPopupV6
     {
         (void)seat, (void)serial;
         // TODO
-        puts("*****************************************************************************************");
-        puts(__PRETTY_FUNCTION__);
-        puts("*****************************************************************************************");
+        ARG_TRACE;
     }
 
     void destroy() override
     {
         // TODO
-        puts("*****************************************************************************************");
-        puts(__PRETTY_FUNCTION__);
-        puts("*****************************************************************************************");
+        ARG_TRACE;
     }
 };
 
@@ -2332,8 +2309,11 @@ struct ZxdgSurfaceV6 : wayland::ZxdgSurfaceV6
         destroyed{std::make_shared<bool>(false)},
         shell{shell}
     {
+        ARG_TRACE_CREATE;
         auto* tmp = wl_resource_get_user_data(surface);
         auto& mir_surface = *static_cast<WlSurface*>(tmp);
+
+        printf("**************************** this=%p : mir_surface= %p\n", static_cast<void*>(this), static_cast<void*>(&mir_surface));
 
         auto const session = session_for_client(client);
 
@@ -2378,6 +2358,7 @@ struct ZxdgSurfaceV6 : wayland::ZxdgSurfaceV6
 
     ~ZxdgSurfaceV6() override
     {
+        ARG_TRACE_DESTROY;
         *destroyed = true;
         if (auto session = session_for_client(client))
         {
@@ -2388,9 +2369,7 @@ struct ZxdgSurfaceV6 : wayland::ZxdgSurfaceV6
     void destroy() override
     {
         // TODO
-        puts("*****************************************************************************************");
-        puts(__PRETTY_FUNCTION__);
-        puts("*****************************************************************************************");
+        ARG_TRACE;
     }
 
     void get_toplevel(uint32_t id) override
@@ -2400,35 +2379,52 @@ struct ZxdgSurfaceV6 : wayland::ZxdgSurfaceV6
 
     void get_popup(uint32_t id, struct wl_resource* parent, struct wl_resource* positioner) override
     {
+        ARG_TRACE;
         (void)positioner;
         new ZxdgPopupV6{client, parent, id};
     }
 
     void set_window_geometry(int32_t x, int32_t y, int32_t width, int32_t height) override
     {
+        ARG_TRACE;
         (void)x, (void)y, (void)width, (void)height;
         // TODO
-        puts("*****************************************************************************************");
-        puts(__PRETTY_FUNCTION__);
-        puts("*****************************************************************************************");
     }
 
     void ack_configure(uint32_t serial) override
     {
+        ARG_TRACE;
         (void)serial;
         // TODO
-        puts("*****************************************************************************************");
-        puts(__PRETTY_FUNCTION__);
-        puts("*****************************************************************************************");
     }
 
-private:
     struct wl_client* const client;
     struct wl_resource* const parent;
     std::shared_ptr<bool> const destroyed;
     std::shared_ptr<mf::Shell> const shell;
     mf::SurfaceId surface_id;
 };
+
+void ZxdgToplevelV6::set_parent(std::experimental::optional<struct wl_resource*> const& parent)
+{
+    ARG_TRACE;
+    shell::SurfaceSpecification new_spec;
+
+    auto const session = session_for_client(client);
+
+    if (parent && parent.value())
+    {
+        auto* tmp = wl_resource_get_user_data(parent.value());
+        auto& mir_surface = *static_cast<ZxdgSurfaceV6*>(tmp);
+        new_spec.parent = std::dynamic_pointer_cast<scene::Surface>(session->get_surface(mir_surface.surface_id));
+    }
+    else
+    {
+        new_spec.parent = std::weak_ptr<scene::Surface>{};
+    }
+
+    shell->modify_surface(session, surface_id, new_spec);
+}
 
 struct ZxdgShellV6 : wayland::ZxdgShellV6
 {
@@ -2447,13 +2443,12 @@ struct ZxdgShellV6 : wayland::ZxdgShellV6
     {
         (void)client, (void)resource;
         // TODO
-        puts("*****************************************************************************************");
-        puts(__PRETTY_FUNCTION__);
-        puts("*****************************************************************************************");
+        ARG_TRACE;
     }
 
     void create_positioner(struct wl_client* client, struct wl_resource* resource, uint32_t id) override
     {
+        ARG_TRACE;
         new ZxdgPositionerV6{client, resource, id};
     }
 
@@ -2463,6 +2458,7 @@ struct ZxdgShellV6 : wayland::ZxdgShellV6
         uint32_t id,
         struct wl_resource* surface) override
     {
+        ARG_TRACE;
         new ZxdgSurfaceV6{client, resource, id, surface, shell, seat};
     }
 
