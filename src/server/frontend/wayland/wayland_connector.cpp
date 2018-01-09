@@ -31,6 +31,7 @@
 #include "mir/frontend/session.h"
 #include "mir/frontend/event_sink.h"
 #include "mir/scene/surface_creation_parameters.h"
+#include "mir/scene/surface.h"
 
 #include "mir/graphics/buffer_properties.h"
 #include "mir/graphics/buffer.h"
@@ -1524,6 +1525,9 @@ private:
     }
     static void get_keyboard(wl_client* client, wl_resource* resource, uint32_t id)
     {
+        puts("*****************************************************************************************");
+        puts(__PRETTY_FUNCTION__);
+        puts("*****************************************************************************************");
         auto me = reinterpret_cast<WlSeat*>(wl_resource_get_user_data(resource));
         auto& input_ctx = me->keyboard[client];
 
@@ -1957,14 +1961,23 @@ protected:
 
     void move(struct wl_resource* /*seat*/, uint32_t /*serial*/) override
     {
+        puts("*****************************************************************************************");
+        puts(__PRETTY_FUNCTION__);
+        puts("*****************************************************************************************");
     }
 
     void resize(struct wl_resource* /*seat*/, uint32_t /*serial*/, uint32_t /*edges*/) override
     {
+        puts("*****************************************************************************************");
+        puts(__PRETTY_FUNCTION__);
+        puts("*****************************************************************************************");
     }
 
     void set_toplevel() override
     {
+        puts("*****************************************************************************************");
+        puts(__PRETTY_FUNCTION__);
+        puts("*****************************************************************************************");
     }
 
     void set_transient(
@@ -1973,6 +1986,9 @@ protected:
         int32_t /*y*/,
         uint32_t /*flags*/) override
     {
+        puts("*****************************************************************************************");
+        puts(__PRETTY_FUNCTION__);
+        puts("*****************************************************************************************");
     }
 
     void set_fullscreen(
@@ -1999,6 +2015,9 @@ protected:
         int32_t /*y*/,
         uint32_t /*flags*/) override
     {
+        puts("*****************************************************************************************");
+        puts(__PRETTY_FUNCTION__);
+        puts("*****************************************************************************************");
     }
 
     void set_maximized(std::experimental::optional<struct wl_resource*> const& output) override
@@ -2015,10 +2034,16 @@ protected:
 
     void set_title(std::string const& /*title*/) override
     {
+        puts("*****************************************************************************************");
+        puts(__PRETTY_FUNCTION__);
+        puts("*****************************************************************************************");
     }
 
     void set_class(std::string const& /*class_*/) override
     {
+        puts("*****************************************************************************************");
+        puts(__PRETTY_FUNCTION__);
+        puts("*****************************************************************************************");
     }
 private:
     std::shared_ptr<bool> const destroyed;
@@ -2057,135 +2082,215 @@ struct ZxdgPositionerV6 : wayland::ZxdgPositionerV6
     ZxdgPositionerV6(struct wl_client* client, struct wl_resource* parent, uint32_t id) :
         wayland::ZxdgPositionerV6(client, parent, id)
     {
+        puts("*****************************************************************************************");
+        puts(__PRETTY_FUNCTION__);
+        puts("*****************************************************************************************");
     }
 
     void destroy() override
     {
         // TODO
+        puts("*****************************************************************************************");
+        puts(__PRETTY_FUNCTION__);
+        puts("*****************************************************************************************");
     }
 
     void set_size(int32_t width, int32_t height) override
     {
         (void)width, (void)height;
         // TODO
+        puts("*****************************************************************************************");
+        puts(__PRETTY_FUNCTION__);
+        puts("*****************************************************************************************");
     }
 
     void set_anchor_rect(int32_t x, int32_t y, int32_t width, int32_t height) override
     {
         (void)x, (void)y, (void)width, (void)height;
         // TODO
+        puts("*****************************************************************************************");
+        puts(__PRETTY_FUNCTION__);
+        puts("*****************************************************************************************");
     }
 
     void set_anchor(uint32_t anchor) override
     {
         (void)anchor;
         // TODO
+        puts("*****************************************************************************************");
+        puts(__PRETTY_FUNCTION__);
+        puts("*****************************************************************************************");
     }
 
     void set_gravity(uint32_t gravity) override
     {
         (void)gravity;
         // TODO
+        puts("*****************************************************************************************");
+        puts(__PRETTY_FUNCTION__);
+        puts("*****************************************************************************************");
     }
 
     void set_constraint_adjustment(uint32_t constraint_adjustment) override
     {
         (void)constraint_adjustment;
         // TODO
+        puts("*****************************************************************************************");
+        puts(__PRETTY_FUNCTION__);
+        puts("*****************************************************************************************");
     }
 
     void set_offset(int32_t x, int32_t y) override
     {
         (void)x, (void)y;
         // TODO
+        puts("*****************************************************************************************");
+        puts(__PRETTY_FUNCTION__);
+        puts("*****************************************************************************************");
     }
 };
 
 struct ZxdgToplevelV6 : wayland::ZxdgToplevelV6
 {
-    ZxdgToplevelV6(struct wl_client* client, struct wl_resource* parent, uint32_t id) :
-        wayland::ZxdgToplevelV6(client, parent, id)
+    ZxdgToplevelV6(struct wl_client* client, struct wl_resource* parent, uint32_t id,
+        std::shared_ptr<mf::Shell> const& shell, mf::SurfaceId surface_id) :
+        wayland::ZxdgToplevelV6(client, parent, id),
+        shell{shell},
+        surface_id{surface_id}
     {
     }
 
     void destroy() override
     {
         // TODO
+        puts("*****************************************************************************************");
+        puts(__PRETTY_FUNCTION__);
+        puts("*****************************************************************************************");
     }
 
     void set_parent(std::experimental::optional<struct wl_resource*> const& parent) override
     {
-        (void)parent;
-        // TODO
+        shell::SurfaceSpecification new_spec;
+
+        auto const session = session_for_client(client);
+
+        if (parent && parent.value())
+        {
+//            auto* tmp = wl_resource_get_user_data(parent.value());
+//            auto& mir_surface = *static_cast<ZxdgToplevelV6*>(tmp);
+//            new_spec.parent = std::dynamic_pointer_cast<scene::Surface>(session->get_surface(mir_surface.surface_id));
+        }
+        else
+        {
+//            new_spec.parent = std::weak_ptr<scene::Surface>{};
+        }
+
+        shell->modify_surface(session, surface_id, new_spec);
     }
 
     void set_title(std::string const& title) override
     {
-        (void)title;
-        // TODO
+        shell::SurfaceSpecification new_spec;
+        new_spec.name = title;
+        auto const session = session_for_client(client);
+        shell->modify_surface(session, surface_id, new_spec);
     }
 
-    void set_app_id(std::string const& app_id) override
+    void set_app_id(std::string const& /*app_id*/) override
     {
-        (void)app_id;
-        // TODO
+        // Logically this sets the session name, but Mir doesn't allow this (currently) and
+        // allowing e.g. "session_for_client(client)->name(app_id);" would break the libmirserver ABI
     }
 
     void show_window_menu(struct wl_resource* seat, uint32_t serial, int32_t x, int32_t y) override
     {
         (void)seat, (void)serial, (void)x, (void)y;
         // TODO
+        puts("*****************************************************************************************");
+        puts(__PRETTY_FUNCTION__);
+        puts("*****************************************************************************************");
     }
 
     void move(struct wl_resource* seat, uint32_t serial) override
     {
         (void)seat, (void)serial;
         // TODO
+        puts("*****************************************************************************************");
+        puts(__PRETTY_FUNCTION__);
+        puts("*****************************************************************************************");
     }
 
     void resize(struct wl_resource* seat, uint32_t serial, uint32_t edges) override
     {
         (void)seat, (void)serial, (void)edges;
         // TODO
+        puts("*****************************************************************************************");
+        puts(__PRETTY_FUNCTION__);
+        puts("*****************************************************************************************");
     }
 
     void set_max_size(int32_t width, int32_t height) override
     {
-        (void)width, (void)height;
-        // TODO
+        shell::SurfaceSpecification new_spec;
+        new_spec.max_width = geometry::Width{width};
+        new_spec.max_height = geometry::Height{height};
+        auto const session = session_for_client(client);
+        shell->modify_surface(session, surface_id, new_spec);
     }
 
     void set_min_size(int32_t width, int32_t height) override
     {
-        (void)width, (void)height;
-        // TODO
+        shell::SurfaceSpecification new_spec;
+        new_spec.min_width = geometry::Width{width};
+        new_spec.min_height = geometry::Height{height};
+        auto const session = session_for_client(client);
+        shell->modify_surface(session, surface_id, new_spec);
     }
 
     void set_maximized() override
     {
-        // TODO
+        shell::SurfaceSpecification new_spec;
+        new_spec.state = mir_window_state_maximized;
+        auto const session = session_for_client(client);
+        shell->modify_surface(session, surface_id, new_spec);
     }
 
     void unset_maximized() override
     {
-        // TODO
+        shell::SurfaceSpecification new_spec;
+        new_spec.state = mir_window_state_restored;
+        auto const session = session_for_client(client);
+        shell->modify_surface(session, surface_id, new_spec);
     }
 
     void set_fullscreen(std::experimental::optional<struct wl_resource*> const& output) override
     {
         (void)output;
         // TODO
+        puts("*****************************************************************************************");
+        puts(__PRETTY_FUNCTION__);
+        puts("*****************************************************************************************");
     }
 
     void unset_fullscreen() override
     {
         // TODO
+        puts("*****************************************************************************************");
+        puts(__PRETTY_FUNCTION__);
+        puts("*****************************************************************************************");
     }
 
     void set_minimized() override
     {
         // TODO
+        puts("*****************************************************************************************");
+        puts(__PRETTY_FUNCTION__);
+        puts("*****************************************************************************************");
     }
+
+private:
+    std::shared_ptr<mf::Shell> const shell;
+    mf::SurfaceId const surface_id;
 };
 
 struct ZxdgPopupV6 : wayland::ZxdgPopupV6
@@ -2199,31 +2304,98 @@ struct ZxdgPopupV6 : wayland::ZxdgPopupV6
     {
         (void)seat, (void)serial;
         // TODO
+        puts("*****************************************************************************************");
+        puts(__PRETTY_FUNCTION__);
+        puts("*****************************************************************************************");
     }
 
     void destroy() override
     {
         // TODO
+        puts("*****************************************************************************************");
+        puts(__PRETTY_FUNCTION__);
+        puts("*****************************************************************************************");
     }
 };
 
 struct ZxdgSurfaceV6 : wayland::ZxdgSurfaceV6
 {
-    ZxdgSurfaceV6(struct wl_client* client, struct wl_resource* parent, uint32_t id) :
+    ZxdgSurfaceV6(wl_client* client,
+        wl_resource* parent,
+        uint32_t id,
+        wl_resource* surface,
+        std::shared_ptr<mf::Shell> const& shell,
+        WlSeat& seat) :
         wayland::ZxdgSurfaceV6(client, parent, id),
         client{client},
-        parent{parent}
+        parent{parent},
+        destroyed{std::make_shared<bool>(false)},
+        shell{shell}
     {
+        auto* tmp = wl_resource_get_user_data(surface);
+        auto& mir_surface = *static_cast<WlSurface*>(tmp);
+
+        auto const session = session_for_client(client);
+
+        auto params = ms::SurfaceCreationParameters()
+            .of_type(mir_window_type_freestyle)
+            .of_size(geom::Size{640, 480})
+            .with_buffer_stream(mir_surface.stream_id);
+
+        auto const sink = std::make_shared<SurfaceEventSink>(&seat, client, surface, resource);
+        surface_id = shell->create_surface(session, params, sink);
+
+        {
+            // The shell isn't guaranteed to respect the requested size
+            auto const window = session->get_surface(surface_id);
+            auto const size = window->client_size();
+            sink->latest_resize(size);
+            seat.spawn(
+                run_unless(
+                    destroyed,
+                    [resource=resource, height = size.height.as_int(), width = size.width.as_int()]()
+                        { wl_shell_surface_send_configure(resource, WL_SHELL_SURFACE_RESIZE_NONE, width, height); }));
+        }
+
+        mir_surface.set_resize_handler(
+            [shell, session, id = surface_id, sink](geom::Size new_size)
+                {
+                    sink->latest_resize(new_size);
+                    shell::SurfaceSpecification new_size_spec;
+                    new_size_spec.width = new_size.width;
+                    new_size_spec.height = new_size.height;
+                    shell->modify_surface(session, id, new_size_spec);
+                });
+
+        mir_surface.set_hide_handler(
+            [shell, session, id = surface_id]()
+                {
+                    shell::SurfaceSpecification hide_spec;
+                    hide_spec.state = mir_window_state_hidden;
+                    shell->modify_surface(session, id, hide_spec);
+                });
+    }
+
+    ~ZxdgSurfaceV6() override
+    {
+        *destroyed = true;
+        if (auto session = session_for_client(client))
+        {
+            shell->destroy_surface(session, surface_id);
+        }
     }
 
     void destroy() override
     {
         // TODO
+        puts("*****************************************************************************************");
+        puts(__PRETTY_FUNCTION__);
+        puts("*****************************************************************************************");
     }
 
     void get_toplevel(uint32_t id) override
     {
-        new ZxdgToplevelV6{client, parent, id};
+        new ZxdgToplevelV6{client, parent, id, shell, surface_id};
     }
 
     void get_popup(uint32_t id, struct wl_resource* parent, struct wl_resource* positioner) override
@@ -2236,22 +2408,38 @@ struct ZxdgSurfaceV6 : wayland::ZxdgSurfaceV6
     {
         (void)x, (void)y, (void)width, (void)height;
         // TODO
+        puts("*****************************************************************************************");
+        puts(__PRETTY_FUNCTION__);
+        puts("*****************************************************************************************");
     }
 
     void ack_configure(uint32_t serial) override
     {
         (void)serial;
         // TODO
+        puts("*****************************************************************************************");
+        puts(__PRETTY_FUNCTION__);
+        puts("*****************************************************************************************");
     }
 
+private:
     struct wl_client* const client;
     struct wl_resource* const parent;
+    std::shared_ptr<bool> const destroyed;
+    std::shared_ptr<mf::Shell> const shell;
+    mf::SurfaceId surface_id;
 };
 
 struct ZxdgShellV6 : wayland::ZxdgShellV6
 {
-    ZxdgShellV6(struct wl_display* display, uint32_t max_version) :
-        wayland::ZxdgShellV6(display, max_version)
+    ZxdgShellV6(
+        struct wl_display* display,
+        uint32_t max_version,
+        std::shared_ptr<mf::Shell> const shell,
+        WlSeat& seat) :
+        wayland::ZxdgShellV6(display, max_version),
+        shell{shell},
+        seat{seat}
     {
     }
 
@@ -2259,6 +2447,9 @@ struct ZxdgShellV6 : wayland::ZxdgShellV6
     {
         (void)client, (void)resource;
         // TODO
+        puts("*****************************************************************************************");
+        puts(__PRETTY_FUNCTION__);
+        puts("*****************************************************************************************");
     }
 
     void create_positioner(struct wl_client* client, struct wl_resource* resource, uint32_t id) override
@@ -2270,9 +2461,9 @@ struct ZxdgShellV6 : wayland::ZxdgShellV6
         struct wl_client* client,
         struct wl_resource* resource,
         uint32_t id,
-        struct wl_resource* /*surface*/) override
+        struct wl_resource* surface) override
     {
-        new ZxdgSurfaceV6{client, resource, id/*, surface*/};
+        new ZxdgSurfaceV6{client, resource, id, surface, shell, seat};
     }
 
     void pong(struct wl_client* client, struct wl_resource* resource, uint32_t serial) override
@@ -2280,6 +2471,10 @@ struct ZxdgShellV6 : wayland::ZxdgShellV6
         (void)client, (void)resource, (void)serial;
         // TODO
     }
+
+private:
+    std::shared_ptr<mf::Shell> const shell;
+    WlSeat& seat;
 };
 }
 }
@@ -2295,9 +2490,9 @@ int halt_eventloop(int fd, uint32_t /*mask*/, void* data)
     if (eventfd_read(fd, &ignored) < 0)
     {
         BOOST_THROW_EXCEPTION((std::system_error{
-           errno,
-           std::system_category(),
-           "Failed to consume pause event notification"}));
+            errno,
+            std::system_category(),
+            "Failed to consume pause event notification"}));
     }
     return 0;
 }
@@ -2359,7 +2554,7 @@ public:
 private:
     WaylandExecutor(wl_event_loop* loop)
         : notify_fd{eventfd(0, EFD_CLOEXEC | EFD_SEMAPHORE | EFD_NONBLOCK)},
-          notify_source{wl_event_loop_add_fd(loop, notify_fd, WL_EVENT_READABLE, &on_notify, this)}
+        notify_source{wl_event_loop_add_fd(loop, notify_fd, WL_EVENT_READABLE, &on_notify, this)}
     {
         if (notify_fd == mir::Fd::invalid)
         {
@@ -2457,8 +2652,8 @@ mf::WaylandConnector::WaylandConnector(
     std::shared_ptr<mf::SessionAuthorizer> const& session_authorizer,
     bool arw_socket)
     : display{wl_display_create(), &cleanup_display},
-      pause_signal{eventfd(0, EFD_CLOEXEC | EFD_SEMAPHORE)},
-      allocator{std::dynamic_pointer_cast<mg::WaylandAllocator>(allocator)}
+    pause_signal{eventfd(0, EFD_CLOEXEC | EFD_SEMAPHORE)},
+    allocator{std::dynamic_pointer_cast<mg::WaylandAllocator>(allocator)}
 {
     if (pause_signal == mir::Fd::invalid)
     {
@@ -2493,7 +2688,7 @@ mf::WaylandConnector::WaylandConnector(
         display.get(),
         display_config);
     shell_global = std::make_unique<mf::WlShell>(display.get(), shell, *seat_global);
-    xdg_shell_global = std::make_unique<mf::ZxdgShellV6>(display.get(), wayland::zxdg_shell_v6_interface.version);
+    xdg_shell_global = std::make_unique<mf::ZxdgShellV6>(display.get(), wayland::zxdg_shell_v6_interface.version, shell, *seat_global);
 
     wl_display_init_shm(display.get());
 
@@ -2587,15 +2782,15 @@ int mf::WaylandConnector::client_socket_fd() const
         WaylandExecutor::executor_for_event_loop(wl_display_get_event_loop(display.get()))
             ->spawn(
                 [socket = socket_fd[server], display = display.get()]()
-                {
-                    if (!wl_client_create(display, socket))
                     {
-                        mir::log_error(
-                            "Failed to create Wayland client object: %s (errno %i)",
-                            strerror(errno),
-                            errno);
-                    }
-                });
+                        if (!wl_client_create(display, socket))
+                        {
+                            mir::log_error(
+                                "Failed to create Wayland client object: %s (errno %i)",
+                                strerror(errno),
+                                errno);
+                        }
+                    });
     }
 
     if (error)
