@@ -663,7 +663,7 @@ private:
     std::shared_ptr<mg::WaylandAllocator> const allocator;
     std::shared_ptr<mir::Executor> const executor;
 
-    std::function<void(Size)> resize_handler;
+    std::function<void(Size)> resize_handler{[](Size){}};
     std::function<void(bool visible)> hide_handler{[](bool){}};
 
     wl_resource* pending_buffer;
@@ -801,10 +801,7 @@ void WlSurface::commit()
          * TODO: Provide a mg::Buffer::logical_size() to do this properly.
          */
         stream->resize(mir_buffer->size());
-        if (resize_handler)
-        {
-            resize_handler(mir_buffer->size());
-        }
+        resize_handler(mir_buffer->size());
         stream->submit_buffer(mir_buffer);
 
         pending_buffer = nullptr;
@@ -1953,6 +1950,8 @@ public:
           destroyed{std::make_shared<bool>(false)},
           shell{shell}
     {
+        // We don't know the size yet, so we guess
+        static Size const default_size{640, 480};
         auto* tmp = wl_resource_get_user_data(surface);
         auto& mir_surface = *static_cast<WlSurface*>(tmp);
 
@@ -1960,7 +1959,7 @@ public:
 
         auto params = ms::SurfaceCreationParameters()
             .of_type(mir_window_type_freestyle)
-            .of_size(Size{640, 480})
+            .of_size(default_size)
             .with_buffer_stream(mir_surface.stream_id);
 
         auto const sink = std::make_shared<SurfaceEventSink>(&seat, client, surface, resource);
@@ -1971,17 +1970,24 @@ public:
             // The shell isn't guaranteed to respect the requested size
             auto const window = session->get_surface(surface_id);
             auto const size = window->client_size();
-            sink->latest_resize(size);
-            seat.spawn(
-                run_unless(
-                    destroyed,
-                    [resource=resource, height = size.height.as_int(), width = size.width.as_int()]()
-                    { wl_shell_surface_send_configure(resource, WL_SHELL_SURFACE_RESIZE_NONE, width, height); }));
+
+            if (size != default_size)
+            {
+                sink->latest_resize(size);
+                seat.spawn(
+                    run_unless(
+                        destroyed,
+                        [resource=resource, height = size.height.as_int(), width = size.width.as_int()]()
+                        { wl_shell_surface_send_configure(resource, WL_SHELL_SURFACE_RESIZE_NONE, width, height); }));
+            }
         }
 
         mir_surface.set_resize_handler(
             [shell, session, id = surface_id, sink](Size new_size)
             {
+                auto const surface = get_surface_for_id(session, id);
+                if (surface->size() == new_size)
+                    return;
                 sink->latest_resize(new_size);
                 shell::SurfaceSpecification new_size_spec;
                 new_size_spec.width = new_size.width;
@@ -2126,8 +2132,8 @@ public:
         std::shared_ptr<mf::Shell> const& shell,
         WlSeat& seat)
         : Shell(display, 1),
-          shell{shell},
-          seat{seat}
+        shell{shell},
+        seat{seat}
     {
     }
 
@@ -2338,7 +2344,7 @@ public:
     using BasicSurfaceEventSink::BasicSurfaceEventSink;
 
     ZxdgSurfaceV6EventSink(WlSeat* seat, wl_client* client, wl_resource* target, wl_resource* event_sink,
-                           std::shared_ptr<bool> const& destroyed) :
+        std::shared_ptr<bool> const& destroyed) :
         BasicSurfaceEventSink(seat, client, target, event_sink),
         destroyed{destroyed}
     {
@@ -2383,6 +2389,9 @@ struct ZxdgSurfaceV6 : wayland::ZxdgSurfaceV6
         destroyed{std::make_shared<bool>(false)},
         shell{shell}
     {
+        // We don't know the size yet, so we guess
+        static Size const default_size{640, 480};
+
         auto* tmp = wl_resource_get_user_data(surface);
         auto& mir_surface = *static_cast<WlSurface*>(tmp);
 
@@ -2398,7 +2407,9 @@ struct ZxdgSurfaceV6 : wayland::ZxdgSurfaceV6
         mir_surface.surface_id = surface_id;
 
         auto const window = session->get_surface(surface_id);
-        sink->send_resize(window->client_size());
+
+        if (window->client_size() != default_size)
+            sink->send_resize(window->client_size());
 
         mir_surface.set_resize_handler(
             [shell, session, id = surface_id, client](Size new_size)
