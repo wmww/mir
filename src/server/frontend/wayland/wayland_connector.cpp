@@ -1691,15 +1691,15 @@ void WaylandEventSink::send_ping(int32_t)
 {
 }
 
-class SurfaceEventSink : public mf::EventSink
+class BasicSurfaceEventSink : public mf::EventSink
 {
 public:
-    SurfaceEventSink(WlSeat* seat, wl_client* client, wl_resource* target, wl_resource* event_sink)
+    BasicSurfaceEventSink(WlSeat* seat, wl_client* client, wl_resource* target, wl_resource* event_sink)
         : seat{seat},
-          client{client},
-          target{target},
-          event_sink{event_sink},
-          window_size{geometry::Size{0,0}}
+        client{client},
+        target{target},
+        event_sink{event_sink},
+        window_size{geometry::Size{0,0}}
     {
     }
 
@@ -1720,7 +1720,9 @@ public:
         this->window_size = window_size;
     }
 
-private:
+    virtual void handle_resize_event(MirResizeEvent const* event) = 0;
+
+protected:
     WlSeat* const seat;
     wl_client* const client;
     wl_resource* const target;
@@ -1728,23 +1730,13 @@ private:
     std::atomic<geometry::Size> window_size;
 };
 
-void SurfaceEventSink::handle_event(MirEvent const& event)
+void BasicSurfaceEventSink::handle_event(MirEvent const& event)
 {
     switch (mir_event_get_type(&event))
     {
     case mir_event_type_resize:
     {
-        auto resize = mir_event_get_resize_event(&event);
-        geometry::Size new_size{mir_resize_event_get_width(resize), mir_resize_event_get_height(resize)};
-        if (window_size != new_size)
-        {
-            seat->spawn([event_sink=event_sink,
-                         width = mir_resize_event_get_width(resize),
-                         height = mir_resize_event_get_height(resize)]()
-                {
-                    wl_shell_surface_send_configure(event_sink, WL_SHELL_SURFACE_RESIZE_NONE, width, height);
-                });
-        }
+        handle_resize_event(mir_event_get_resize_event(&event));
         break;
     }
     case mir_event_type_input:
@@ -1782,6 +1774,28 @@ void SurfaceEventSink::handle_event(MirEvent const& event)
     default:
         break;
     }
+}
+
+class SurfaceEventSink : public BasicSurfaceEventSink
+{
+public:
+    using BasicSurfaceEventSink::BasicSurfaceEventSink;
+
+    void handle_resize_event(MirResizeEvent const* event) override;
+};
+
+void SurfaceEventSink::handle_resize_event(MirResizeEvent const* event)
+{
+    geometry::Size new_size{mir_resize_event_get_width(event), mir_resize_event_get_height(event)};
+    if (window_size != new_size)
+        {
+            seat->spawn([event_sink= event_sink,
+                         width = mir_resize_event_get_width(event),
+                         height = mir_resize_event_get_height(event)]()
+                {
+                    wl_shell_surface_send_configure(event_sink, WL_SHELL_SURFACE_RESIZE_NONE, width, height);
+                });
+        }
 }
 
 class Output
@@ -2295,6 +2309,43 @@ struct ZxdgPopupV6 : wayland::ZxdgPopupV6
     }
 };
 
+class ZxdgSurfaceV6EventSink : public BasicSurfaceEventSink
+{
+public:
+    using BasicSurfaceEventSink::BasicSurfaceEventSink;
+
+    ZxdgSurfaceV6EventSink(WlSeat* seat, wl_client* client, wl_resource* target, wl_resource* event_sink,
+                           std::shared_ptr<bool> const& destroyed) :
+        BasicSurfaceEventSink(seat, client, target, event_sink),
+        destroyed{destroyed}
+    {
+    }
+
+    void handle_resize_event(MirResizeEvent const* event) override
+    {
+        send_resize({mir_resize_event_get_width(event), mir_resize_event_get_height(event)});
+    }
+
+    void send_resize(geometry::Size const& new_size)
+    {
+        if (window_size != new_size)
+        {
+            latest_resize(new_size);
+
+            seat->spawn(run_unless(destroyed, [event_sink=event_sink, serial=serial++]()
+                {
+                    // TODO event_sink is a zxdg_surface_v6, not a wl_shell_surface
+                    // wl_shell_surface_send_configure(event_sink, WL_SHELL_SURFACE_RESIZE_NONE, width, height);
+                    wl_resource_post_event(event_sink, 0, serial);
+                }));
+        }
+    }
+
+private:
+    std::shared_ptr<bool> const destroyed;
+    unsigned int serial{0};
+};
+
 struct ZxdgSurfaceV6 : wayland::ZxdgSurfaceV6
 {
     ZxdgSurfaceV6(wl_client* client,
@@ -2318,24 +2369,15 @@ struct ZxdgSurfaceV6 : wayland::ZxdgSurfaceV6
         auto const session = session_for_client(client);
 
         auto params = ms::SurfaceCreationParameters()
-            .of_type(mir_window_type_freestyle)
+            .of_type(mir_window_type_normal)
             .of_size(geom::Size{640, 480})
             .with_buffer_stream(mir_surface.stream_id);
 
-        auto const sink = std::make_shared<SurfaceEventSink>(&seat, client, surface, resource);
+        auto const sink = std::make_shared<ZxdgSurfaceV6EventSink>(&seat, client, surface, resource, destroyed);
         surface_id = shell->create_surface(session, params, sink);
 
-        {
-            // The shell isn't guaranteed to respect the requested size
-            auto const window = session->get_surface(surface_id);
-            auto const size = window->client_size();
-            sink->latest_resize(size);
-            seat.spawn(
-                run_unless(
-                    destroyed,
-                    [resource=resource, height = size.height.as_int(), width = size.width.as_int()]()
-                        { wl_shell_surface_send_configure(resource, WL_SHELL_SURFACE_RESIZE_NONE, width, height); }));
-        }
+        auto const window = session->get_surface(surface_id);
+        sink->send_resize(window->client_size());
 
         mir_surface.set_resize_handler(
             [shell, session, id = surface_id, sink](geom::Size new_size)
