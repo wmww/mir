@@ -83,9 +83,9 @@ namespace mf = mir::frontend;
 namespace mg = mir::graphics;
 namespace mc = mir::compositor;
 namespace ms = mir::scene;
-namespace geom = mir::geometry;
 namespace mcl = mir::client;
 namespace mi = mir::input;
+using namespace mir::geometry;
 
 namespace
 {
@@ -137,7 +137,7 @@ public:
     void handle_error(ClientVisibleError const&) override {}
 
     void add_buffer(graphics::Buffer&) override {}
-    void error_buffer(geometry::Size, MirPixelFormat, std::string const& ) override {}
+    void error_buffer(Size, MirPixelFormat, std::string const& ) override {}
     void update_buffer(graphics::Buffer&) override {}
 
 private:
@@ -325,7 +325,7 @@ void setup_new_client_handler(wl_display* display, std::shared_ptr<mf::Shell> co
 std::shared_ptr<mf::BufferStream> create_buffer_stream(mf::Session& session)
 {
     mg::BufferProperties const props{
-        geom::Size{geom::Width{0}, geom::Height{0}},
+        Size{Width{0}, Height{0}},
         mir_pixel_format_invalid,
         mg::BufferUsage::undefined
     };
@@ -402,7 +402,7 @@ public:
         }
     }
 
-    static std::shared_ptr<graphics::Buffer> mir_buffer_from_wl_buffer(
+    static std::shared_ptr<Buffer> mir_buffer_from_wl_buffer(
         wl_resource* buffer,
         std::function<void()>&& on_consumed)
     {
@@ -445,7 +445,7 @@ public:
         return nullptr;
     }
 
-    geometry::Size size() const override
+    Size size() const override
     {
         return size_;
     }
@@ -455,7 +455,7 @@ public:
         return format_;
     }
 
-    graphics::NativeBufferBase *native_buffer_base() override
+    NativeBufferBase *native_buffer_base() override
     {
         return this;
     }
@@ -525,7 +525,7 @@ public:
         do_with_pixels(static_cast<unsigned char const*>(data.get()));
     }
 
-    geometry::Stride stride() const override
+    Stride stride() const override
     {
         return stride_;
     }
@@ -593,8 +593,8 @@ private:
     wl_shm_buffer* buffer;
     wl_resource* const resource;
 
-    geom::Size const size_;
-    geom::Stride const stride_;
+    Size const size_;
+    Stride const stride_;
     MirPixelFormat const format_;
 
     std::unique_ptr<uint8_t[]> const data;
@@ -619,10 +619,9 @@ public:
           pending_frames{std::make_shared<std::vector<wl_resource*>>()},
           destroyed{std::make_shared<bool>(false)}
     {
-        ARG_TRACE_CREATE;
         auto session = session_for_client(client);
         mg::BufferProperties const props{
-            geom::Size{geom::Width{0}, geom::Height{0}},
+            Size{Width{0}, Height{0}},
             mir_pixel_format_invalid,
             mg::BufferUsage::undefined
         };
@@ -636,21 +635,18 @@ public:
 
     ~WlSurface()
     {
-        ARG_TRACE_DESTROY;
         *destroyed = true;
         if (auto session = session_for_client(client))
             session->destroy_buffer_stream(stream_id);
     }
 
-    void set_resize_handler(std::function<void(geom::Size)> const& handler)
+    void set_resize_handler(std::function<void(Size)> const& handler)
     {
-        ARG_TRACE;
         resize_handler = handler;
     }
 
     void set_hide_handler(std::function<void()> const& handler)
     {
-        ARG_TRACE;
         hide_handler = handler;
     }
 
@@ -660,7 +656,7 @@ private:
     std::shared_ptr<mg::WaylandAllocator> const allocator;
     std::shared_ptr<mir::Executor> const executor;
 
-    std::function<void(geom::Size)> resize_handler;
+    std::function<void(Size)> resize_handler;
     std::function<void()> hide_handler;
 
     wl_resource* pending_buffer;
@@ -681,13 +677,11 @@ private:
 
 void WlSurface::destroy()
 {
-    ARG_TRACE;
     wl_resource_destroy(resource);
 }
 
 void WlSurface::attach(std::experimental::optional<wl_resource*> const& buffer, int32_t x, int32_t y)
 {
-    ARG_TRACE;
     if (x != 0 || y != 0)
     {
         mir::log_warning("Client requested unimplemented non-zero attach offset. Rendering will be incorrect.");
@@ -703,25 +697,24 @@ void WlSurface::attach(std::experimental::optional<wl_resource*> const& buffer, 
 
 void WlSurface::damage(int32_t x, int32_t y, int32_t width, int32_t height)
 {
-    ARG_TRACE;
     (void)x;
     (void)y;
     (void)width;
     (void)height;
+    // This isn't essential, but could enable optimizations
 }
 
 void WlSurface::damage_buffer(int32_t x, int32_t y, int32_t width, int32_t height)
 {
-    ARG_TRACE;
     (void)x;
     (void)y;
     (void)width;
     (void)height;
+    // This isn't essential, but could enable optimizations
 }
 
 void WlSurface::frame(uint32_t callback)
 {
-    ARG_TRACE;
     pending_frames->emplace_back(
         wl_resource_create(client, &wl_callback_interface, 1, callback));
 }
@@ -740,7 +733,6 @@ void WlSurface::set_input_region(const std::experimental::optional<wl_resource*>
 
 void WlSurface::commit()
 {
-    ARG_TRACE;
     if (pending_buffer)
     {
         auto send_frame_notifications =
@@ -859,13 +851,11 @@ public:
     Region(wl_client* client, wl_resource* parent, uint32_t id)
         : wayland::Region(client, parent, id)
     {
-        ARG_TRACE;
     }
 protected:
 
     void destroy() override
     {
-        ARG_TRACE;
     }
     void add(int32_t /*x*/, int32_t /*y*/, int32_t /*width*/, int32_t /*height*/) override
     {
@@ -1699,7 +1689,7 @@ public:
         client{client},
         target{target},
         event_sink{event_sink},
-        window_size{geometry::Size{0,0}}
+        window_size{Size{0,0}}
     {
     }
 
@@ -1712,10 +1702,10 @@ public:
 
     void send_buffer(frontend::BufferStreamId, graphics::Buffer&, graphics::BufferIpcMsgType) override {}
     void add_buffer(graphics::Buffer&) override {}
-    void error_buffer(geometry::Size, MirPixelFormat, std::string const& ) override {}
+    void error_buffer(Size, MirPixelFormat, std::string const& ) override {}
     void update_buffer(graphics::Buffer&) override {}
 
-    void latest_resize(geometry::Size window_size)
+    void latest_resize(Size window_size)
     {
         this->window_size = window_size;
     }
@@ -1727,7 +1717,7 @@ protected:
     wl_client* const client;
     wl_resource* const target;
     wl_resource* const event_sink;
-    std::atomic<geometry::Size> window_size;
+    std::atomic<Size> window_size;
 };
 
 void BasicSurfaceEventSink::handle_event(MirEvent const& event)
@@ -1786,7 +1776,7 @@ public:
 
 void SurfaceEventSink::handle_resize_event(MirResizeEvent const* event)
 {
-    geometry::Size new_size{mir_resize_event_get_width(event), mir_resize_event_get_height(event)};
+    Size new_size{mir_resize_event_get_width(event), mir_resize_event_get_height(event)};
     if (window_size != new_size)
         {
             seat->spawn([event_sink= event_sink,
@@ -1966,7 +1956,7 @@ public:
 
         auto params = ms::SurfaceCreationParameters()
             .of_type(mir_window_type_freestyle)
-            .of_size(geom::Size{640, 480})
+            .of_size(Size{640, 480})
             .with_buffer_stream(mir_surface.stream_id);
 
         auto const sink = std::make_shared<SurfaceEventSink>(&seat, client, surface, resource);
@@ -1985,7 +1975,7 @@ public:
         }
 
         mir_surface.set_resize_handler(
-            [shell, session, id = surface_id, sink](geom::Size new_size)
+            [shell, session, id = surface_id, sink](Size new_size)
             {
                 sink->latest_resize(new_size);
                 shell::SurfaceSpecification new_size_spec;
@@ -2125,13 +2115,11 @@ struct ZxdgPositionerV6 : wayland::ZxdgPositionerV6
     ZxdgPositionerV6(struct wl_client* client, struct wl_resource* parent, uint32_t id) :
         wayland::ZxdgPositionerV6(client, parent, id)
     {
-        ARG_TRACE;
     }
 
     void destroy() override
     {
         // TODO
-        ARG_TRACE;
     }
 
     void set_size(int32_t width, int32_t height) override
@@ -2190,7 +2178,6 @@ struct ZxdgToplevelV6 : wayland::ZxdgToplevelV6
     void destroy() override
     {
         // TODO
-        ARG_TRACE;
     }
 
     void set_parent(std::experimental::optional<struct wl_resource*> const& parent) override;
@@ -2233,8 +2220,8 @@ struct ZxdgToplevelV6 : wayland::ZxdgToplevelV6
     void set_max_size(int32_t width, int32_t height) override
     {
         shell::SurfaceSpecification new_spec;
-        new_spec.max_width = geometry::Width{width};
-        new_spec.max_height = geometry::Height{height};
+        new_spec.max_width = Width{width};
+        new_spec.max_height = Height{height};
         auto const session = session_for_client(client);
         shell->modify_surface(session, surface_id, new_spec);
     }
@@ -2242,8 +2229,8 @@ struct ZxdgToplevelV6 : wayland::ZxdgToplevelV6
     void set_min_size(int32_t width, int32_t height) override
     {
         shell::SurfaceSpecification new_spec;
-        new_spec.min_width = geometry::Width{width};
-        new_spec.min_height = geometry::Height{height};
+        new_spec.min_width = Width{width};
+        new_spec.min_height = Height{height};
         auto const session = session_for_client(client);
         shell->modify_surface(session, surface_id, new_spec);
     }
@@ -2305,7 +2292,6 @@ struct ZxdgPopupV6 : wayland::ZxdgPopupV6
     void destroy() override
     {
         // TODO
-        ARG_TRACE;
     }
 };
 
@@ -2326,7 +2312,7 @@ public:
         send_resize({mir_resize_event_get_width(event), mir_resize_event_get_height(event)});
     }
 
-    void send_resize(geometry::Size const& new_size)
+    void send_resize(Size const& new_size)
     {
         if (window_size != new_size)
         {
@@ -2360,7 +2346,6 @@ struct ZxdgSurfaceV6 : wayland::ZxdgSurfaceV6
         destroyed{std::make_shared<bool>(false)},
         shell{shell}
     {
-        ARG_TRACE_CREATE;
         auto* tmp = wl_resource_get_user_data(surface);
         auto& mir_surface = *static_cast<WlSurface*>(tmp);
 
@@ -2370,7 +2355,7 @@ struct ZxdgSurfaceV6 : wayland::ZxdgSurfaceV6
 
         auto params = ms::SurfaceCreationParameters()
             .of_type(mir_window_type_normal)
-            .of_size(geom::Size{640, 480})
+            .of_size(Size{640, 480})
             .with_buffer_stream(mir_surface.stream_id);
 
         auto const sink = std::make_shared<ZxdgSurfaceV6EventSink>(&seat, client, surface, resource, destroyed);
@@ -2380,7 +2365,7 @@ struct ZxdgSurfaceV6 : wayland::ZxdgSurfaceV6
         sink->send_resize(window->client_size());
 
         mir_surface.set_resize_handler(
-            [shell, session, id = surface_id, sink](geom::Size new_size)
+            [shell, session, id = surface_id, sink](Size new_size)
                 {
                     sink->latest_resize(new_size);
                     shell::SurfaceSpecification new_size_spec;
@@ -2400,7 +2385,6 @@ struct ZxdgSurfaceV6 : wayland::ZxdgSurfaceV6
 
     ~ZxdgSurfaceV6() override
     {
-        ARG_TRACE_DESTROY;
         *destroyed = true;
         if (auto session = session_for_client(client))
         {
@@ -2411,7 +2395,6 @@ struct ZxdgSurfaceV6 : wayland::ZxdgSurfaceV6
     void destroy() override
     {
         // TODO
-        ARG_TRACE;
     }
 
     void get_toplevel(uint32_t id) override
@@ -2431,6 +2414,11 @@ struct ZxdgSurfaceV6 : wayland::ZxdgSurfaceV6
         ARG_TRACE;
         (void)x, (void)y, (void)width, (void)height;
         // TODO
+        auto const session = session_for_client(client);
+        shell::SurfaceSpecification modifications;
+        modifications.width = Width{width};
+        modifications.height = Height{height};
+        shell->modify_surface(session, surface_id, modifications);
     }
 
     void ack_configure(uint32_t serial) override
@@ -2449,7 +2437,6 @@ struct ZxdgSurfaceV6 : wayland::ZxdgSurfaceV6
 
 void ZxdgToplevelV6::set_parent(std::experimental::optional<struct wl_resource*> const& parent)
 {
-    ARG_TRACE;
     shell::SurfaceSpecification new_spec;
 
     auto const session = session_for_client(client);
@@ -2485,12 +2472,10 @@ struct ZxdgShellV6 : wayland::ZxdgShellV6
     {
         (void)client, (void)resource;
         // TODO
-        ARG_TRACE;
     }
 
     void create_positioner(struct wl_client* client, struct wl_resource* resource, uint32_t id) override
     {
-        ARG_TRACE;
         new ZxdgPositionerV6{client, resource, id};
     }
 
@@ -2500,7 +2485,6 @@ struct ZxdgShellV6 : wayland::ZxdgShellV6
         uint32_t id,
         struct wl_resource* surface) override
     {
-        ARG_TRACE;
         new ZxdgSurfaceV6{client, resource, id, surface, shell, seat};
     }
 
@@ -2558,9 +2542,7 @@ struct DataDeviceManager : wayland::DataDeviceManager
     void get_data_device(
         struct wl_client* client, struct wl_resource* resource, uint32_t id, struct wl_resource* seat) override
     {
-        ARG_TRACE;
-        (void)client, (void)resource, (void)id, (void)seat;
-
+        (void)seat;
         new DataDevice{client, resource, id};
     }
 };
