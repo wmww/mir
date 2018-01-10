@@ -250,6 +250,11 @@ std::shared_ptr<mf::Session> session_for_client(wl_client* client)
     return nullptr;
 }
 
+std::shared_ptr<ms::Surface> get_surface_for_id(std::shared_ptr<mf::Session> const& session, mf::SurfaceId surface_id)
+{
+    return std::dynamic_pointer_cast<ms::Surface>(session->get_surface(surface_id));
+}
+
 struct ClientSessionConstructor
 {
     ClientSessionConstructor(std::shared_ptr<mf::Shell> const& shell,
@@ -808,14 +813,14 @@ void WlSurface::commit()
 
 void WlSurface::set_buffer_transform(int32_t transform)
 {
-    ARG_TRACE;
     (void)transform;
+    // TODO
 }
 
 void WlSurface::set_buffer_scale(int32_t scale)
 {
-    ARG_TRACE;
     (void)scale;
+    // TODO
 }
 
 class WlCompositor : public wayland::Compositor
@@ -1987,7 +1992,7 @@ public:
         mir_surface.set_hide_handler(
             [shell, session, id = surface_id](bool visible)
             {
-                if (std::dynamic_pointer_cast<scene::Surface>(session->get_surface(id))->visible() == visible)
+                if (get_surface_for_id(session, id)->visible() == visible)
                     return;
                 shell::SurfaceSpecification hide_spec;
                 hide_spec.state = visible ? mir_window_state_restored : mir_window_state_hidden;
@@ -2034,7 +2039,7 @@ protected:
         auto& parent_surface = *static_cast<WlSurface*>(tmp);
 
         shell::SurfaceSpecification new_spec;
-        new_spec.parent = std::dynamic_pointer_cast<scene::Surface>(session->get_surface(parent_surface.surface_id));
+        new_spec.parent = get_surface_for_id(session, parent_surface.surface_id);
         new_spec.aux_rect = Rectangle{{X{x}, Y{y}}, {Width{}, Height{}}};
         new_spec.surface_placement_gravity = mir_placement_gravity_northwest;
         new_spec.aux_rect_placement_gravity = mir_placement_gravity_southeast;
@@ -2073,7 +2078,7 @@ protected:
         auto& parent_surface = *static_cast<WlSurface*>(tmp);
 
         shell::SurfaceSpecification new_spec;
-        new_spec.parent = std::dynamic_pointer_cast<scene::Surface>(session->get_surface(parent_surface.surface_id));
+        new_spec.parent = get_surface_for_id(session, parent_surface.surface_id);
         new_spec.aux_rect = Rectangle{{X{x}, Y{y}}, {Width{}, Height{}}};
         new_spec.surface_placement_gravity = mir_placement_gravity_northwest;
         new_spec.aux_rect_placement_gravity = mir_placement_gravity_southeast;
@@ -2248,6 +2253,9 @@ struct ZxdgToplevelV6 : wayland::ZxdgToplevelV6
 
     void set_max_size(int32_t width, int32_t height) override
     {
+        if (width == 0) width = std::numeric_limits<int>::max();
+        if (height == 0) height = std::numeric_limits<int>::max();
+
         shell::SurfaceSpecification new_spec;
         new_spec.max_width = Width{width};
         new_spec.max_height = Height{height};
@@ -2393,9 +2401,12 @@ struct ZxdgSurfaceV6 : wayland::ZxdgSurfaceV6
         sink->send_resize(window->client_size());
 
         mir_surface.set_resize_handler(
-            [shell, session, id = surface_id, sink](Size new_size)
+            [shell, session, id = surface_id, client](Size new_size)
                 {
-                    sink->latest_resize(new_size);
+                    auto const surface = get_surface_for_id(session, id);
+                    if (surface->size() == new_size)
+                        return;
+
                     shell::SurfaceSpecification new_size_spec;
                     new_size_spec.width = new_size.width;
                     new_size_spec.height = new_size.height;
@@ -2405,7 +2416,7 @@ struct ZxdgSurfaceV6 : wayland::ZxdgSurfaceV6
         mir_surface.set_hide_handler(
             [shell, session, id = surface_id](bool visible)
                 {
-                    if (std::dynamic_pointer_cast<scene::Surface>(session->get_surface(id))->visible() == visible)
+                    if (get_surface_for_id(session, id)->visible() == visible)
                         return;
                     shell::SurfaceSpecification hide_spec;
                     hide_spec.state = visible ? mir_window_state_restored : mir_window_state_hidden;
@@ -2439,15 +2450,19 @@ struct ZxdgSurfaceV6 : wayland::ZxdgSurfaceV6
         new ZxdgPopupV6{client, parent, id};
     }
 
-    void set_window_geometry(int32_t x, int32_t y, int32_t width, int32_t height) override
+    void set_window_geometry(int32_t /*x*/, int32_t /*y*/, int32_t width, int32_t height) override
     {
-        ARG_TRACE;
-        (void)x, (void)y, (void)width, (void)height;
-        // TODO
         auto const session = session_for_client(client);
+        auto const surface = get_surface_for_id(session, surface_id);
+
+        Size const new_size{width, height};
+
+        if (surface->size() == new_size)
+            return;
+
         shell::SurfaceSpecification modifications;
-        modifications.width = Width{width};
-        modifications.height = Height{height};
+        modifications.width = new_size.width;
+        modifications.height = new_size.height;
         shell->modify_surface(session, surface_id, modifications);
     }
 
@@ -2475,7 +2490,7 @@ void ZxdgToplevelV6::set_parent(std::experimental::optional<struct wl_resource*>
     {
         auto* tmp = wl_resource_get_user_data(parent.value());
         auto& mir_surface = *static_cast<ZxdgSurfaceV6*>(tmp);
-        new_spec.parent = std::dynamic_pointer_cast<scene::Surface>(session->get_surface(mir_surface.surface_id));
+        new_spec.parent = get_surface_for_id(session, mir_surface.surface_id);
     }
     else
     {
