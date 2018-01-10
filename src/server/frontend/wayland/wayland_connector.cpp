@@ -645,19 +645,21 @@ public:
         resize_handler = handler;
     }
 
-    void set_hide_handler(std::function<void()> const& handler)
+    void set_hide_handler(std::function<void(bool visible)> const& handler)
     {
         hide_handler = handler;
     }
 
     mf::BufferStreamId stream_id;
     std::shared_ptr<mf::BufferStream> stream;
+    mf::SurfaceId surface_id;       // ID of any associated surface
+
 private:
     std::shared_ptr<mg::WaylandAllocator> const allocator;
     std::shared_ptr<mir::Executor> const executor;
 
     std::function<void(Size)> resize_handler;
-    std::function<void()> hide_handler;
+    std::function<void(bool visible)> hide_handler{[](bool){}};
 
     wl_resource* pending_buffer;
     std::shared_ptr<std::vector<wl_resource*>> const pending_frames;
@@ -687,10 +689,7 @@ void WlSurface::attach(std::experimental::optional<wl_resource*> const& buffer, 
         mir::log_warning("Client requested unimplemented non-zero attach offset. Rendering will be incorrect.");
     }
 
-    if(!buffer && hide_handler)
-    {
-        hide_handler();
-    }
+    hide_handler(!!buffer);
 
     pending_buffer = *buffer;
 }
@@ -1961,6 +1960,7 @@ public:
 
         auto const sink = std::make_shared<SurfaceEventSink>(&seat, client, surface, resource);
         surface_id = shell->create_surface(session, params, sink);
+        mir_surface.surface_id = surface_id;
 
         {
             // The shell isn't guaranteed to respect the requested size
@@ -1985,10 +1985,12 @@ public:
             });
 
         mir_surface.set_hide_handler(
-            [shell, session, id = surface_id]()
+            [shell, session, id = surface_id](bool visible)
             {
+                if (std::dynamic_pointer_cast<scene::Surface>(session->get_surface(id))->visible() == visible)
+                    return;
                 shell::SurfaceSpecification hide_spec;
-                hide_spec.state = mir_window_state_hidden;
+                hide_spec.state = visible ? mir_window_state_restored : mir_window_state_hidden;
                 shell->modify_surface(session, id, hide_spec);
             });
     }
@@ -2022,12 +2024,24 @@ protected:
     }
 
     void set_transient(
-        struct wl_resource* /*parent*/,
-        int32_t /*x*/,
-        int32_t /*y*/,
+        struct wl_resource* parent,
+        int32_t x,
+        int32_t y,
         uint32_t /*flags*/) override
     {
-        ARG_TRACE;
+        auto const session = session_for_client(client);
+        auto* tmp = wl_resource_get_user_data(parent);
+        auto& parent_surface = *static_cast<WlSurface*>(tmp);
+
+        shell::SurfaceSpecification new_spec;
+        new_spec.parent = std::dynamic_pointer_cast<scene::Surface>(session->get_surface(parent_surface.surface_id));
+        new_spec.aux_rect = Rectangle{{X{x}, Y{y}}, {Width{}, Height{}}};
+        new_spec.surface_placement_gravity = mir_placement_gravity_northwest;
+        new_spec.aux_rect_placement_gravity = mir_placement_gravity_southeast;
+        new_spec.placement_hints = mir_placement_hints_slide_x;
+        new_spec.aux_rect_placement_offset_x = 0;
+        new_spec.aux_rect_placement_offset_y = 0;
+        shell->modify_surface(session, surface_id, new_spec);
     }
 
     void set_fullscreen(
@@ -2049,12 +2063,24 @@ protected:
     void set_popup(
         struct wl_resource* /*seat*/,
         uint32_t /*serial*/,
-        struct wl_resource* /*parent*/,
-        int32_t /*x*/,
-        int32_t /*y*/,
+        struct wl_resource* parent,
+        int32_t x,
+        int32_t y,
         uint32_t /*flags*/) override
     {
-        ARG_TRACE;
+        auto const session = session_for_client(client);
+        auto* tmp = wl_resource_get_user_data(parent);
+        auto& parent_surface = *static_cast<WlSurface*>(tmp);
+
+        shell::SurfaceSpecification new_spec;
+        new_spec.parent = std::dynamic_pointer_cast<scene::Surface>(session->get_surface(parent_surface.surface_id));
+        new_spec.aux_rect = Rectangle{{X{x}, Y{y}}, {Width{}, Height{}}};
+        new_spec.surface_placement_gravity = mir_placement_gravity_northwest;
+        new_spec.aux_rect_placement_gravity = mir_placement_gravity_southeast;
+        new_spec.placement_hints = mir_placement_hints_slide_x;
+        new_spec.aux_rect_placement_offset_x = 0;
+        new_spec.aux_rect_placement_offset_y = 0;
+        shell->modify_surface(session, surface_id, new_spec);
     }
 
     void set_maximized(std::experimental::optional<struct wl_resource*> const& output) override
@@ -2069,9 +2095,12 @@ protected:
         shell->modify_surface(session, surface_id, mods);
     }
 
-    void set_title(std::string const& /*title*/) override
+    void set_title(std::string const& title) override
     {
-        ARG_TRACE;
+        shell::SurfaceSpecification new_spec;
+        new_spec.name = title;
+        auto const session = session_for_client(client);
+        shell->modify_surface(session, surface_id, new_spec);
     }
 
     void set_class(std::string const& /*class_*/) override
@@ -2349,8 +2378,6 @@ struct ZxdgSurfaceV6 : wayland::ZxdgSurfaceV6
         auto* tmp = wl_resource_get_user_data(surface);
         auto& mir_surface = *static_cast<WlSurface*>(tmp);
 
-        printf("**************************** this=%p : mir_surface= %p\n", static_cast<void*>(this), static_cast<void*>(&mir_surface));
-
         auto const session = session_for_client(client);
 
         auto params = ms::SurfaceCreationParameters()
@@ -2360,6 +2387,7 @@ struct ZxdgSurfaceV6 : wayland::ZxdgSurfaceV6
 
         auto const sink = std::make_shared<ZxdgSurfaceV6EventSink>(&seat, client, surface, resource, destroyed);
         surface_id = shell->create_surface(session, params, sink);
+        mir_surface.surface_id = surface_id;
 
         auto const window = session->get_surface(surface_id);
         sink->send_resize(window->client_size());
@@ -2375,10 +2403,12 @@ struct ZxdgSurfaceV6 : wayland::ZxdgSurfaceV6
                 });
 
         mir_surface.set_hide_handler(
-            [shell, session, id = surface_id]()
+            [shell, session, id = surface_id](bool visible)
                 {
+                    if (std::dynamic_pointer_cast<scene::Surface>(session->get_surface(id))->visible() == visible)
+                        return;
                     shell::SurfaceSpecification hide_spec;
-                    hide_spec.state = mir_window_state_hidden;
+                    hide_spec.state = visible ? mir_window_state_restored : mir_window_state_hidden;
                     shell->modify_surface(session, id, hide_spec);
                 });
     }
