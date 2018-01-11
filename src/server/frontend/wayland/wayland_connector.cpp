@@ -647,11 +647,16 @@ public:
     void set_resize_handler(std::function<void(Size)> const& handler)
     {
         resize_handler = handler;
+        if (existing_size)
+        {
+            resize_handler(existing_size.value());
+            existing_size = decltype(existing_size){};
+        }
     }
 
-    void set_hide_handler(std::function<void(bool visible)> const& handler)
+    void set_visibility_handler(std::function<void(bool visible)> const& handler)
     {
-        hide_handler = handler;
+        visiblity_handler = handler;
     }
 
     mf::BufferStreamId stream_id;
@@ -662,9 +667,10 @@ private:
     std::shared_ptr<mg::WaylandAllocator> const allocator;
     std::shared_ptr<mir::Executor> const executor;
 
-    std::function<void(Size)> resize_handler{[](Size){}};
-    std::function<void(bool visible)> hide_handler{[](bool){}};
+    std::function<void(Size)> resize_handler{[this](Size size){ existing_size = size; }};
+    std::function<void(bool visible)> visiblity_handler{[](bool){}};
 
+    std::experimental::optional<Size> existing_size;
     wl_resource* pending_buffer;
     std::shared_ptr<std::vector<wl_resource*>> const pending_frames;
     std::shared_ptr<bool> const destroyed;
@@ -693,7 +699,7 @@ void WlSurface::attach(std::experimental::optional<wl_resource*> const& buffer, 
         mir::log_warning("Client requested unimplemented non-zero attach offset. Rendering will be incorrect.");
     }
 
-    hide_handler(!!buffer);
+    visiblity_handler(!!buffer);
 
     pending_buffer = *buffer;
 }
@@ -2132,7 +2138,7 @@ protected:
 private:
     void resize_handler(
         WlSurface* mir_surface,
-        std::shared_ptr<SurfaceEventSink> const& sink,
+        std::shared_ptr<BasicSurfaceEventSink> const& sink,
         WlSeat& seat,
         Size initial_size)
     {
@@ -2175,7 +2181,7 @@ private:
             }
         }
 
-        mir_surface->set_hide_handler(
+        mir_surface->set_visibility_handler(
             [shell=shell, session, id = surface_id](bool visible)
                 {
                     if (get_surface_for_id(session, id)->visible() == visible)
@@ -2201,8 +2207,8 @@ public:
         std::shared_ptr<mf::Shell> const& shell,
         WlSeat& seat)
         : Shell(display, 1),
-        shell{shell},
-        seat{seat}
+          shell{shell},
+          seat{seat}
     {
     }
 
@@ -2274,13 +2280,15 @@ struct ZxdgPositionerV6 : wayland::ZxdgPositionerV6
     }
 };
 
+struct ZxdgSurfaceV6;
+
 struct ZxdgToplevelV6 : wayland::ZxdgToplevelV6
 {
     ZxdgToplevelV6(struct wl_client* client, struct wl_resource* parent, uint32_t id,
-        std::shared_ptr<mf::Shell> const& shell, mf::SurfaceId surface_id) :
+        std::shared_ptr<mf::Shell> const& shell, ZxdgSurfaceV6* self) :
         wayland::ZxdgToplevelV6(client, parent, id),
         shell{shell},
-        surface_id{surface_id}
+        self{self}
     {
     }
 
@@ -2291,13 +2299,7 @@ struct ZxdgToplevelV6 : wayland::ZxdgToplevelV6
 
     void set_parent(std::experimental::optional<struct wl_resource*> const& parent) override;
 
-    void set_title(std::string const& title) override
-    {
-        shell::SurfaceSpecification new_spec;
-        new_spec.name = title;
-        auto const session = session_for_client(client);
-        shell->modify_surface(session, surface_id, new_spec);
-    }
+    void set_title(std::string const& title) override;
 
     void set_app_id(std::string const& /*app_id*/) override
     {
@@ -2326,42 +2328,13 @@ struct ZxdgToplevelV6 : wayland::ZxdgToplevelV6
         ARG_TRACE;
     }
 
-    void set_max_size(int32_t width, int32_t height) override
-    {
-        if (width == 0) width = std::numeric_limits<int>::max();
-        if (height == 0) height = std::numeric_limits<int>::max();
+    void set_max_size(int32_t width, int32_t height) override;
 
-        shell::SurfaceSpecification new_spec;
-        new_spec.max_width = Width{width};
-        new_spec.max_height = Height{height};
-        auto const session = session_for_client(client);
-        shell->modify_surface(session, surface_id, new_spec);
-    }
+    void set_min_size(int32_t width, int32_t height) override;
 
-    void set_min_size(int32_t width, int32_t height) override
-    {
-        shell::SurfaceSpecification new_spec;
-        new_spec.min_width = Width{width};
-        new_spec.min_height = Height{height};
-        auto const session = session_for_client(client);
-        shell->modify_surface(session, surface_id, new_spec);
-    }
+    void set_maximized() override;
 
-    void set_maximized() override
-    {
-        shell::SurfaceSpecification new_spec;
-        new_spec.state = mir_window_state_maximized;
-        auto const session = session_for_client(client);
-        shell->modify_surface(session, surface_id, new_spec);
-    }
-
-    void unset_maximized() override
-    {
-        shell::SurfaceSpecification new_spec;
-        new_spec.state = mir_window_state_restored;
-        auto const session = session_for_client(client);
-        shell->modify_surface(session, surface_id, new_spec);
-    }
+    void unset_maximized() override;
 
     void set_fullscreen(std::experimental::optional<struct wl_resource*> const& output) override
     {
@@ -2384,7 +2357,7 @@ struct ZxdgToplevelV6 : wayland::ZxdgToplevelV6
 
 private:
     std::shared_ptr<mf::Shell> const shell;
-    mf::SurfaceId const surface_id;
+    ZxdgSurfaceV6* const self;
 };
 
 struct ZxdgPopupV6 : wayland::ZxdgPopupV6
@@ -2417,29 +2390,30 @@ public:
         BasicSurfaceEventSink(seat, client, target, event_sink),
         destroyed{destroyed}
     {
+        post_configure();
     }
 
     void handle_resize_event(MirResizeEvent const* event) override
     {
-        send_resize({mir_resize_event_get_width(event), mir_resize_event_get_height(event)});
-    }
-
-    void send_resize(Size const& new_size)
-    {
+        Size const& new_size = {mir_resize_event_get_width(event), mir_resize_event_get_height(event)};
         if (window_size != new_size)
         {
             latest_resize(new_size);
 
-            seat->spawn(run_unless(destroyed, [event_sink=event_sink, serial=serial++]()
-                {
-                    // TODO event_sink is a zxdg_surface_v6, not a wl_shell_surface
-                    // wl_shell_surface_send_configure(event_sink, WL_SHELL_SURFACE_RESIZE_NONE, width, height);
-                    wl_resource_post_event(event_sink, 0, serial);
-                }));
+            // TODO event_sink is a zxdg_surface_v6, not a wl_shell_surface
+            // wl_shell_surface_send_configure(event_sink, WL_SHELL_SURFACE_RESIZE_NONE, width, height);
+
+            post_configure();
         }
     }
 
 private:
+    void post_configure()
+    {
+        seat->spawn(run_unless(destroyed, [event_sink= event_sink, serial= serial++]()
+            { wl_resource_post_event(event_sink, 0, serial); }));
+    }
+
     std::shared_ptr<bool> const destroyed;
     unsigned int serial{0};
 };
@@ -2456,60 +2430,25 @@ struct ZxdgSurfaceV6 : wayland::ZxdgSurfaceV6
         client{client},
         parent{parent},
         destroyed{std::make_shared<bool>(false)},
-        shell{shell}
+        shell{shell},
+        sink{std::make_shared<ZxdgSurfaceV6EventSink>(&seat, client, surface, resource, destroyed)}
     {
-        // We don't know the size yet, so we guess
-        static Size const default_size{640, 480};
-
         auto* tmp = wl_resource_get_user_data(surface);
-        auto& mir_surface = *static_cast<WlSurface*>(tmp);
+        auto* mir_surface = static_cast<WlSurface*>(tmp);
 
-        auto const session = session_for_client(client);
-
-        auto params = ms::SurfaceCreationParameters()
-            .of_type(mir_window_type_normal)
-            .of_size(Size{640, 480})
-            .with_buffer_stream(mir_surface.stream_id);
-
-        auto const sink = std::make_shared<ZxdgSurfaceV6EventSink>(&seat, client, surface, resource, destroyed);
-        surface_id = shell->create_surface(session, params, sink);
-        mir_surface.surface_id = surface_id;
-
-        auto const window = session->get_surface(surface_id);
-
-        if (window->client_size() != default_size)
-            sink->send_resize(window->client_size());
-
-        mir_surface.set_resize_handler(
-            [shell, session, id = surface_id, client](Size new_size)
-                {
-                    auto const surface = get_surface_for_id(session, id);
-                    if (surface->size() == new_size)
-                        return;
-
-                    shell::SurfaceSpecification new_size_spec;
-                    new_size_spec.width = new_size.width;
-                    new_size_spec.height = new_size.height;
-                    shell->modify_surface(session, id, new_size_spec);
-                });
-
-        mir_surface.set_hide_handler(
-            [shell, session, id = surface_id](bool visible)
-                {
-                    if (get_surface_for_id(session, id)->visible() == visible)
-                        return;
-                    shell::SurfaceSpecification hide_spec;
-                    hide_spec.state = visible ? mir_window_state_restored : mir_window_state_hidden;
-                    shell->modify_surface(session, id, hide_spec);
-                });
+        mir_surface->set_resize_handler([mir_surface, this](Size initial_size)
+            { resize_handler(mir_surface, initial_size); });
     }
 
     ~ZxdgSurfaceV6() override
     {
         *destroyed = true;
-        if (auto session = session_for_client(client))
+        if (surface_id.as_value())
         {
-            shell->destroy_surface(session, surface_id);
+            if (auto session = session_for_client(client))
+            {
+                shell->destroy_surface(session, surface_id);
+            }
         }
     }
 
@@ -2520,7 +2459,7 @@ struct ZxdgSurfaceV6 : wayland::ZxdgSurfaceV6
 
     void get_toplevel(uint32_t id) override
     {
-        new ZxdgToplevelV6{client, parent, id, shell, surface_id};
+        new ZxdgToplevelV6{client, parent, id, shell, this};
     }
 
     void get_popup(uint32_t id, struct wl_resource* parent, struct wl_resource* positioner) override
@@ -2532,18 +2471,25 @@ struct ZxdgSurfaceV6 : wayland::ZxdgSurfaceV6
 
     void set_window_geometry(int32_t /*x*/, int32_t /*y*/, int32_t width, int32_t height) override
     {
-        auto const session = session_for_client(client);
-        auto const surface = get_surface_for_id(session, surface_id);
-
         Size const new_size{width, height};
 
-        if (surface->size() == new_size)
-            return;
+        if (surface_id.as_value())
+        {
+            auto const session = session_for_client(client);
+            auto const surface = get_surface_for_id(session, surface_id);
 
-        shell::SurfaceSpecification modifications;
-        modifications.width = new_size.width;
-        modifications.height = new_size.height;
-        shell->modify_surface(session, surface_id, modifications);
+            if (surface->size() == new_size)
+                return;
+
+            shell::SurfaceSpecification modifications;
+            modifications.width = new_size.width;
+            modifications.height = new_size.height;
+            shell->modify_surface(session, surface_id, modifications);
+        }
+        else
+        {
+            params.size = new_size;
+        }
     }
 
     void ack_configure(uint32_t serial) override
@@ -2553,31 +2499,217 @@ struct ZxdgSurfaceV6 : wayland::ZxdgSurfaceV6
         // TODO
     }
 
+    void resize_handler(WlSurface* mir_surface, Size size)
+    {
+        auto const session = session_for_client(client);
+
+        if (surface_id.as_value())
+        {
+            auto const surface = get_surface_for_id(session, surface_id);
+            if (surface->size() == size)
+                return;
+            sink->latest_resize(size);
+            shell::SurfaceSpecification new_size_spec;
+            new_size_spec.width = size.width;
+            new_size_spec.height = size.height;
+            shell->modify_surface(session, surface_id, new_size_spec);
+            return;
+        }
+
+        params.size = size;
+        params.content_id = mir_surface->stream_id;
+        surface_id = shell->create_surface(session, params, sink);
+        mir_surface->surface_id = surface_id;
+
+        mir_surface->set_visibility_handler(
+            [shell=shell, session, id = surface_id](bool visible)
+                {
+                    if (get_surface_for_id(session, id)->visible() == visible)
+                        return;
+                    shell::SurfaceSpecification hide_spec;
+                    hide_spec.state = visible ? mir_window_state_restored : mir_window_state_hidden;
+                    shell->modify_surface(session, id, hide_spec);
+                });
+    }
+
+    void set_parent(std::experimental::optional<struct wl_resource*> const& parent);
+    void set_title(std::string const& title);
+    void set_max_size(int32_t width, int32_t height);
+    void set_min_size(int32_t width, int32_t height);
+    void set_maximized();
+    void unset_maximized();
+
     struct wl_client* const client;
     struct wl_resource* const parent;
     std::shared_ptr<bool> const destroyed;
     std::shared_ptr<mf::Shell> const shell;
     mf::SurfaceId surface_id;
+    std::shared_ptr<BasicSurfaceEventSink> const sink;
+    ms::SurfaceCreationParameters params = ms::SurfaceCreationParameters().of_type(mir_window_type_normal);
 };
 
-void ZxdgToplevelV6::set_parent(std::experimental::optional<struct wl_resource*> const& parent)
+void ZxdgSurfaceV6::set_title(std::string const& title)
 {
-    shell::SurfaceSpecification new_spec;
-
-    auto const session = session_for_client(client);
-
-    if (parent && parent.value())
+    if (surface_id.as_value())
     {
-        auto* tmp = wl_resource_get_user_data(parent.value());
-        auto& mir_surface = *static_cast<ZxdgSurfaceV6*>(tmp);
-        new_spec.parent_id = mir_surface.surface_id;
+        shell::SurfaceSpecification new_spec;
+        new_spec.name = title;
+        auto const session = session_for_client(client);
+        shell->modify_surface(session, surface_id, new_spec);
     }
     else
     {
-        new_spec.parent = std::weak_ptr<scene::Surface>{};
+        params.name = title;
     }
+}
 
-    shell->modify_surface(session, surface_id, new_spec);
+
+void ZxdgSurfaceV6::set_parent(std::experimental::optional<struct wl_resource*> const& parent)
+{
+    if (surface_id.as_value())
+    {
+        shell::SurfaceSpecification new_spec;
+
+        auto const session = session_for_client(client);
+
+        if (parent && parent.value())
+        {
+            auto* tmp = wl_resource_get_user_data(parent.value());
+            auto& mir_surface = *static_cast<ZxdgSurfaceV6*>(tmp);
+            new_spec.parent_id = mir_surface.surface_id;
+        }
+        else
+        {
+            new_spec.parent = std::weak_ptr<scene::Surface>{};
+        }
+
+        shell->modify_surface(session, surface_id, new_spec);
+    }
+    else
+    {
+        if (parent && parent.value())
+        {
+            auto* tmp = wl_resource_get_user_data(parent.value());
+            auto& mir_surface = *static_cast<ZxdgSurfaceV6*>(tmp);
+            params.parent_id = mir_surface.surface_id;
+        }
+        else
+        {
+            if (params.parent_id.is_set())
+                params.parent_id.consume();
+        }
+    }
+}
+
+void ZxdgSurfaceV6::set_max_size(int32_t width, int32_t height)
+{
+    if (surface_id.as_value())
+    {
+        if (width == 0) width = std::numeric_limits<int>::max();
+        if (height == 0) height = std::numeric_limits<int>::max();
+
+        shell::SurfaceSpecification new_spec;
+        new_spec.max_width = Width{width};
+        new_spec.max_height = Height{height};
+        auto const session = session_for_client(client);
+        shell->modify_surface(session, surface_id, new_spec);
+    }
+    else
+    {
+        if (width == 0)
+        {
+            if (params.max_width.is_set())
+                params.max_width.consume();
+        }
+        else
+            params.max_width = Width{width};
+
+        if (height == 0)
+        {
+            if (params.max_height.is_set())
+                params.max_height.consume();
+        }
+        else
+            params.max_height = Height{height};
+    }
+}
+
+void ZxdgSurfaceV6::set_min_size(int32_t width, int32_t height)
+{
+    if (surface_id.as_value())
+    {
+        shell::SurfaceSpecification new_spec;
+        new_spec.min_width = Width{width};
+        new_spec.min_height = Height{height};
+        auto const session = session_for_client(client);
+        shell->modify_surface(session, surface_id, new_spec);
+    }
+    else
+    {
+        params.min_width = Width{width};
+        params.min_height = Height{height};
+    }
+}
+
+void ZxdgSurfaceV6::set_maximized()
+{
+    if (surface_id.as_value())
+    {
+        shell::SurfaceSpecification new_spec;
+        new_spec.state = mir_window_state_maximized;
+        auto const session = session_for_client(client);
+        shell->modify_surface(session, surface_id, new_spec);
+    }
+    else
+    {
+        params.state = mir_window_state_maximized;
+    }
+}
+
+void ZxdgSurfaceV6::unset_maximized()
+{
+    if (surface_id.as_value())
+    {
+        shell::SurfaceSpecification new_spec;
+        new_spec.state = mir_window_state_restored;
+        auto const session = session_for_client(client);
+        shell->modify_surface(session, surface_id, new_spec);
+    }
+    else
+    {
+        params.state = mir_window_state_restored;
+    }
+}
+
+
+void ZxdgToplevelV6::set_parent(std::experimental::optional<struct wl_resource*> const& parent)
+{
+    self->set_parent(parent);
+}
+
+void ZxdgToplevelV6::set_title(std::string const& title)
+{
+    self->set_title(title);
+}
+
+void ZxdgToplevelV6::set_max_size(int32_t width, int32_t height)
+{
+    self->set_max_size(width, height);
+}
+
+void ZxdgToplevelV6::set_min_size(int32_t width, int32_t height)
+{
+    self->set_min_size(width, height);
+}
+
+void ZxdgToplevelV6::set_maximized()
+{
+    self->set_maximized();
+}
+
+void ZxdgToplevelV6::unset_maximized()
+{
+    self->unset_maximized();
 }
 
 struct ZxdgShellV6 : wayland::ZxdgShellV6
