@@ -1944,74 +1944,30 @@ public:
         wl_resource* parent,
         uint32_t id,
         wl_resource* surface,
-        std::shared_ptr<mf::Shell> const& shell,
+        std::shared_ptr<mf::Shell> const& shell_,
         WlSeat& seat)
         : ShellSurface(client, parent, id),
           destroyed{std::make_shared<bool>(false)},
-          shell{shell}
+          shell{shell_}
     {
-        // We don't know the size yet, so we guess
-        static Size const default_size{640, 480};
         auto* tmp = wl_resource_get_user_data(surface);
-        auto& mir_surface = *static_cast<WlSurface*>(tmp);
-
-        auto const session = session_for_client(client);
-
-        auto params = ms::SurfaceCreationParameters()
-            .of_type(mir_window_type_freestyle)
-            .of_size(default_size)
-            .with_buffer_stream(mir_surface.stream_id);
+        auto* mir_surface = static_cast<WlSurface*>(tmp);
 
         auto const sink = std::make_shared<SurfaceEventSink>(&seat, client, surface, resource);
-        surface_id = shell->create_surface(session, params, sink);
-        mir_surface.surface_id = surface_id;
 
-        {
-            // The shell isn't guaranteed to respect the requested size
-            auto const window = session->get_surface(surface_id);
-            auto const size = window->client_size();
-
-            if (size != default_size)
-            {
-                sink->latest_resize(size);
-                seat.spawn(
-                    run_unless(
-                        destroyed,
-                        [resource=resource, height = size.height.as_int(), width = size.width.as_int()]()
-                        { wl_shell_surface_send_configure(resource, WL_SHELL_SURFACE_RESIZE_NONE, width, height); }));
-            }
-        }
-
-        mir_surface.set_resize_handler(
-            [shell, session, id = surface_id, sink](Size new_size)
-            {
-                auto const surface = get_surface_for_id(session, id);
-                if (surface->size() == new_size)
-                    return;
-                sink->latest_resize(new_size);
-                shell::SurfaceSpecification new_size_spec;
-                new_size_spec.width = new_size.width;
-                new_size_spec.height = new_size.height;
-                shell->modify_surface(session, id, new_size_spec);
-            });
-
-        mir_surface.set_hide_handler(
-            [shell, session, id = surface_id](bool visible)
-            {
-                if (get_surface_for_id(session, id)->visible() == visible)
-                    return;
-                shell::SurfaceSpecification hide_spec;
-                hide_spec.state = visible ? mir_window_state_restored : mir_window_state_hidden;
-                shell->modify_surface(session, id, hide_spec);
-            });
+        mir_surface->set_resize_handler([mir_surface, sink, &seat, this](Size initial_size)
+            { resize_handler(mir_surface, sink, seat, initial_size); });
     }
 
     ~WlShellSurface() override
     {
         *destroyed = true;
-        if (auto session = session_for_client(client))
+        if (surface_id.as_value())
         {
-            shell->destroy_surface(session, surface_id);
+            if (auto session = session_for_client(client))
+            {
+                shell->destroy_surface(session, surface_id);
+            }
         }
     }
 protected:
@@ -2044,15 +2000,29 @@ protected:
         auto* tmp = wl_resource_get_user_data(parent);
         auto& parent_surface = *static_cast<WlSurface*>(tmp);
 
-        shell::SurfaceSpecification new_spec;
-        new_spec.parent = get_surface_for_id(session, parent_surface.surface_id);
-        new_spec.aux_rect = Rectangle{{X{x}, Y{y}}, {Width{}, Height{}}};
-        new_spec.surface_placement_gravity = mir_placement_gravity_northwest;
-        new_spec.aux_rect_placement_gravity = mir_placement_gravity_southeast;
-        new_spec.placement_hints = mir_placement_hints_slide_x;
-        new_spec.aux_rect_placement_offset_x = 0;
-        new_spec.aux_rect_placement_offset_y = 0;
-        shell->modify_surface(session, surface_id, new_spec);
+        if (surface_id.as_value())
+        {
+            shell::SurfaceSpecification new_spec;
+            new_spec.parent_id = parent_surface.surface_id;
+            new_spec.aux_rect = Rectangle{{X{x},    Y{y}},
+                                          {Width{}, Height{}}};
+            new_spec.surface_placement_gravity = mir_placement_gravity_northwest;
+            new_spec.aux_rect_placement_gravity = mir_placement_gravity_southeast;
+            new_spec.placement_hints = mir_placement_hints_slide_x;
+            new_spec.aux_rect_placement_offset_x = 0;
+            new_spec.aux_rect_placement_offset_y = 0;
+            shell->modify_surface(session, surface_id, new_spec);
+        }
+        else
+        {
+            params.parent_id = parent_surface.surface_id;
+            params.aux_rect = Rectangle{{x, y}, {}};
+            params.surface_placement_gravity = mir_placement_gravity_northwest;
+            params.aux_rect_placement_gravity = mir_placement_gravity_southeast;
+            params.placement_hints = mir_placement_hints_slide_x;
+            params.aux_rect_placement_offset_x = 0;
+            params.aux_rect_placement_offset_y = 0;
+        }
     }
 
     void set_fullscreen(
@@ -2060,15 +2030,26 @@ protected:
         uint32_t /*framerate*/,
         std::experimental::optional<struct wl_resource*> const& output) override
     {
-        mir::shell::SurfaceSpecification mods;
-        mods.state = mir_window_state_fullscreen;
-        if (output)
+        if (surface_id.as_value())
         {
-            // TODO{alan_g} mods.output_id = DisplayConfigurationOutputId_from(output)
-        }
+            mir::shell::SurfaceSpecification mods;
+            mods.state = mir_window_state_fullscreen;
+            if (output)
+            {
+                // TODO{alan_g} mods.output_id = DisplayConfigurationOutputId_from(output)
+            }
 
-        auto const session = session_for_client(client);
-        shell->modify_surface(session, surface_id, mods);
+            auto const session = session_for_client(client);
+            shell->modify_surface(session, surface_id, mods);
+        }
+        else
+        {
+            params.state = mir_window_state_fullscreen;
+            if (output)
+            {
+                // TODO{alan_g} params.output_id = DisplayConfigurationOutputId_from(output)
+            }
+        }
     }
 
     void set_popup(
@@ -2083,45 +2064,134 @@ protected:
         auto* tmp = wl_resource_get_user_data(parent);
         auto& parent_surface = *static_cast<WlSurface*>(tmp);
 
-        shell::SurfaceSpecification new_spec;
-        new_spec.parent = get_surface_for_id(session, parent_surface.surface_id);
-        new_spec.aux_rect = Rectangle{{X{x}, Y{y}}, {Width{}, Height{}}};
-        new_spec.surface_placement_gravity = mir_placement_gravity_northwest;
-        new_spec.aux_rect_placement_gravity = mir_placement_gravity_southeast;
-        new_spec.placement_hints = mir_placement_hints_slide_x;
-        new_spec.aux_rect_placement_offset_x = 0;
-        new_spec.aux_rect_placement_offset_y = 0;
-        shell->modify_surface(session, surface_id, new_spec);
+        if (surface_id.as_value())
+        {
+            shell::SurfaceSpecification new_spec;
+            new_spec.parent_id = parent_surface.surface_id;
+            new_spec.aux_rect = Rectangle{{X{x}, Y{y}}, {Width{}, Height{}}};
+            new_spec.surface_placement_gravity = mir_placement_gravity_northwest;
+            new_spec.aux_rect_placement_gravity = mir_placement_gravity_southeast;
+            new_spec.placement_hints = mir_placement_hints_slide_x;
+            new_spec.aux_rect_placement_offset_x = 0;
+            new_spec.aux_rect_placement_offset_y = 0;
+            shell->modify_surface(session, surface_id, new_spec);
+        }
+        else
+        {
+            params.parent_id = parent_surface.surface_id;
+            params.aux_rect = Rectangle{{X{x}, Y{y}}, {Width{}, Height{}}};
+            params.surface_placement_gravity = mir_placement_gravity_northwest;
+            params.aux_rect_placement_gravity = mir_placement_gravity_southeast;
+            params.placement_hints = mir_placement_hints_slide_x;
+            params.aux_rect_placement_offset_x = 0;
+            params.aux_rect_placement_offset_y = 0;
+        }
     }
 
     void set_maximized(std::experimental::optional<struct wl_resource*> const& output) override
     {
-        mir::shell::SurfaceSpecification mods;
-        mods.state = mir_window_state_maximized;
-        if (output)
+        if (surface_id.as_value())
         {
-            // TODO{alan_g} mods.output_id = DisplayConfigurationOutputId_from(output)
+            mir::shell::SurfaceSpecification mods;
+            mods.state = mir_window_state_maximized;
+            if (output)
+            {
+                // TODO{alan_g} mods.output_id = DisplayConfigurationOutputId_from(output)
+            }
+            auto const session = session_for_client(client);
+            shell->modify_surface(session, surface_id, mods);
         }
-        auto const session = session_for_client(client);
-        shell->modify_surface(session, surface_id, mods);
+        else
+        {
+            params.state = mir_window_state_maximized;
+            if (output)
+            {
+                // TODO{alan_g} params.output_id = DisplayConfigurationOutputId_from(output)
+            }
+        }
     }
 
     void set_title(std::string const& title) override
     {
-        shell::SurfaceSpecification new_spec;
-        new_spec.name = title;
-        auto const session = session_for_client(client);
-        shell->modify_surface(session, surface_id, new_spec);
+        if (surface_id.as_value())
+        {
+            shell::SurfaceSpecification new_spec;
+            new_spec.name = title;
+            auto const session = session_for_client(client);
+            shell->modify_surface(session, surface_id, new_spec);
+        }
+        else
+        {
+            params.name = title;
+        }
     }
 
     void set_class(std::string const& /*class_*/) override
     {
         ARG_TRACE;
     }
+
+    void resize_handler(
+        WlSurface* mir_surface,
+        std::shared_ptr<SurfaceEventSink> const& sink,
+        WlSeat& seat,
+        Size initial_size)
+    {
+        auto const session = session_for_client(client);
+
+        if (surface_id.as_value())
+        {
+            auto const surface = get_surface_for_id(session, surface_id);
+            if (surface->size() == initial_size)
+                return;
+            sink->latest_resize(initial_size);
+            shell::SurfaceSpecification new_size_spec;
+            new_size_spec.width = initial_size.width;
+            new_size_spec.height = initial_size.height;
+            shell->modify_surface(session, surface_id, new_size_spec);
+            return;
+        }
+
+        params.size = initial_size;
+        params.content_id = mir_surface->stream_id;
+        surface_id = shell->create_surface(session, params, sink);
+        mir_surface->surface_id = surface_id;
+
+        {
+            // The shell isn't guaranteed to respect the requested size
+            auto const window = session->get_surface(surface_id);
+            auto const size = window->client_size();
+
+            if (size != initial_size)
+            {
+                sink->latest_resize(size);
+                seat.spawn(
+                    run_unless(
+                        destroyed,
+                        [resource = resource, height = size.height.as_int(), width = size.width.as_int()]()
+                        {
+                            wl_shell_surface_send_configure(
+                                resource, WL_SHELL_SURFACE_RESIZE_NONE, width, height);
+                        }));
+            }
+        }
+
+        mir_surface->set_hide_handler(
+            [shell=shell, session, id = surface_id](bool visible)
+            {
+                if (get_surface_for_id(session, id)->visible() == visible)
+                    return;
+                shell::SurfaceSpecification hide_spec;
+                hide_spec.state = visible ? mir_window_state_restored : mir_window_state_hidden;
+                shell->modify_surface(session, id, hide_spec);
+            });
+    }
 private:
     std::shared_ptr<bool> const destroyed;
     std::shared_ptr<mf::Shell> const shell;
     mf::SurfaceId surface_id;
+
+    ms::SurfaceCreationParameters params = ms::SurfaceCreationParameters().of_type(mir_window_type_freestyle);
 };
 
 class WlShell : public wayland::Shell
@@ -2501,7 +2571,7 @@ void ZxdgToplevelV6::set_parent(std::experimental::optional<struct wl_resource*>
     {
         auto* tmp = wl_resource_get_user_data(parent.value());
         auto& mir_surface = *static_cast<ZxdgSurfaceV6*>(tmp);
-        new_spec.parent = get_surface_for_id(session, mir_surface.surface_id);
+        new_spec.parent_id = mir_surface.surface_id;
     }
     else
     {
