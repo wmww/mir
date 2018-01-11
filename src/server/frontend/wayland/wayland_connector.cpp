@@ -292,8 +292,8 @@ void create_client_session(wl_listener* listener, void* data)
                                                    client_uid, client_gid};
     if (!construction_context->session_authorizer->connection_is_allowed(*session_cred))
     {
-      wl_client_destroy(client);
-      return;
+        wl_client_destroy(client);
+        return;
     }
 
     auto session = construction_context->shell->open_session(
@@ -330,7 +330,7 @@ void setup_new_client_handler(wl_display* display, std::shared_ptr<mf::Shell> co
 std::shared_ptr<mf::BufferStream> create_buffer_stream(mf::Session& session)
 {
     mg::BufferProperties const props{
-        Size{Width{0}, Height{0}},
+        geom::Size{geom::Width{0}, geom::Height{0}},
         mir_pixel_format_invalid,
         mg::BufferUsage::undefined
     };
@@ -538,15 +538,15 @@ public:
 private:
     WlShmBuffer(
         wl_resource* buffer,
-        std::function<void()>&& on_consumed)
-        : buffer{shm_buffer_from_resource_checked(buffer)},
-          resource{buffer},
-          size_{wl_shm_buffer_get_width(this->buffer), wl_shm_buffer_get_height(this->buffer)},
-          stride_{wl_shm_buffer_get_stride(this->buffer)},
-          format_{wl_format_to_mir_format(wl_shm_buffer_get_format(this->buffer))},
-          data{std::make_unique<uint8_t[]>(size_.height.as_int() * stride_.as_int())},
-          consumed{false},
-          on_consumed{std::move(on_consumed)}
+        std::function<void()>&& on_consumed) :
+        buffer{shm_buffer_from_resource_checked(buffer)},
+        resource{buffer},
+        size_{wl_shm_buffer_get_width(this->buffer), wl_shm_buffer_get_height(this->buffer)},
+        stride_{wl_shm_buffer_get_stride(this->buffer)},
+        format_{wl_format_to_mir_format(wl_shm_buffer_get_format(this->buffer))},
+        data{std::make_unique<uint8_t[]>(size_.height.as_int() * stride_.as_int())},
+        consumed{false},
+        on_consumed{std::move(on_consumed)}
     {
         if (stride_.as_int() < size_.width.as_int() * MIR_BYTES_PER_PIXEL(format_))
         {
@@ -557,8 +557,7 @@ private:
                 "Did you accidentally specify stride in pixels?",
                 stride_.as_int(), size_.width.as_int(), MIR_BYTES_PER_PIXEL(format_));
 
-            BOOST_THROW_EXCEPTION((
-                std::runtime_error{"Buffer has invalid stride"}));
+            BOOST_THROW_EXCEPTION((std::runtime_error{"Buffer has invalid stride"}));
         }
 
         wl_shm_buffer_begin_access(this->buffer);
@@ -616,13 +615,13 @@ public:
         wl_resource* parent,
         uint32_t id,
         std::shared_ptr<mir::Executor> const& executor,
-        std::shared_ptr<mg::WaylandAllocator> const& allocator)
-        : Surface(client, parent, id),
-          allocator{allocator},
-          executor{executor},
-          pending_buffer{nullptr},
-          pending_frames{std::make_shared<std::vector<wl_resource*>>()},
-          destroyed{std::make_shared<bool>(false)}
+        std::shared_ptr<mg::WaylandAllocator> const& allocator) :
+        Surface(client, parent, id),
+        allocator{allocator},
+        executor{executor},
+        pending_buffer{nullptr},
+        pending_frames{std::make_shared<std::vector<wl_resource*>>()},
+        destroyed{std::make_shared<bool>(false)}
     {
         auto session = session_for_client(client);
         mg::BufferProperties const props{
@@ -886,14 +885,14 @@ public:
         uint32_t id,
         mir::input::Keymap const& initial_keymap,
         std::function<void(WlKeyboard*)> const& on_destroy,
-        std::shared_ptr<mir::Executor> const& executor)
-        : Keyboard(client, parent, id),
-          keymap{nullptr, &xkb_keymap_unref},
-          state{nullptr, &xkb_state_unref},
-          context{xkb_context_new(XKB_CONTEXT_NO_FLAGS), &xkb_context_unref},
-          executor{executor},
-          on_destroy{on_destroy},
-          destroyed{std::make_shared<bool>(false)}
+        std::shared_ptr<mir::Executor> const& executor) :
+        Keyboard(client, parent, id),
+        keymap{nullptr, &xkb_keymap_unref},
+        state{nullptr, &xkb_state_unref},
+        context{xkb_context_new(XKB_CONTEXT_NO_FLAGS), &xkb_context_unref},
+        executor{executor},
+        on_destroy{on_destroy},
+        destroyed{std::make_shared<bool>(false)}
     {
         // TODO: We should really grab the keymap for the focused surface when
         // we receive focus.
@@ -1485,7 +1484,7 @@ private:
             mir::input::Keymap const& keymap,
             std::function<void(mir::input::Keymap const&)> const& on_keymap_commit)
             : current_keymap{keymap},
-              on_keymap_commit{on_keymap_commit}
+            on_keymap_commit{on_keymap_commit}
         {
         }
 
@@ -1516,7 +1515,7 @@ private:
     {
         auto me = reinterpret_cast<WlSeat*>(data);
         auto resource = wl_resource_create(client, &wl_seat_interface,
-            std::min(version, 6u), id);
+                                           std::min(version, 6u), id);
         if (resource == nullptr)
         {
             wl_client_post_no_memory(client);
@@ -1687,10 +1686,10 @@ class BasicSurfaceEventSink : public mf::EventSink
 public:
     BasicSurfaceEventSink(WlSeat* seat, wl_client* client, wl_resource* target, wl_resource* event_sink)
         : seat{seat},
-        client{client},
-        target{target},
-        event_sink{event_sink},
-        window_size{Size{0,0}}
+          client{client},
+          target{target},
+          event_sink{event_sink},
+          window_size{geometry::Size{0,0}}
     {
     }
 
@@ -1779,14 +1778,14 @@ void SurfaceEventSink::handle_resize_event(MirResizeEvent const* event)
 {
     Size new_size{mir_resize_event_get_width(event), mir_resize_event_get_height(event)};
     if (window_size != new_size)
-        {
-            seat->spawn([event_sink= event_sink,
-                         width = mir_resize_event_get_width(event),
-                         height = mir_resize_event_get_height(event)]()
-                {
-                    wl_shell_surface_send_configure(event_sink, WL_SHELL_SURFACE_RESIZE_NONE, width, height);
-                });
-        }
+    {
+        seat->spawn([event_sink= event_sink,
+                        width = mir_resize_event_get_width(event),
+                        height = mir_resize_event_get_height(event)]()
+                        {
+                            wl_shell_surface_send_configure(event_sink, WL_SHELL_SURFACE_RESIZE_NONE, width, height);
+                        });
+    }
 }
 
 class Output
@@ -1853,7 +1852,7 @@ private:
     {
         auto output = reinterpret_cast<Output*>(data);
         auto resource = wl_resource_create(client, &wl_output_interface,
-            std::min(version, 2u), id);
+                                           std::min(version, 2u), id);
         if (resource == NULL) {
             wl_client_post_no_memory(client);
             return;
@@ -1900,7 +1899,7 @@ private:
     void create_output(mg::DisplayConfigurationOutput const& initial_config)
     {
         if (initial_config.used)
-       {
+        {
             outputs.emplace(
                 initial_config.id,
                 std::make_unique<Output>(
@@ -1945,10 +1944,10 @@ public:
         uint32_t id,
         wl_resource* surface,
         std::shared_ptr<mf::Shell> const& shell_,
-        WlSeat& seat)
-        : ShellSurface(client, parent, id),
-          destroyed{std::make_shared<bool>(false)},
-          shell{shell_}
+        WlSeat& seat) :
+        ShellSurface(client, parent, id),
+        destroyed{std::make_shared<bool>(false)},
+        shell{shell_}
     {
         auto* tmp = wl_resource_get_user_data(surface);
         auto* mir_surface = static_cast<WlSurface*>(tmp);
@@ -1956,7 +1955,7 @@ public:
         auto const sink = std::make_shared<SurfaceEventSink>(&seat, client, surface, resource);
 
         mir_surface->set_resize_handler([mir_surface, sink, &seat, this](Size initial_size)
-            { resize_handler(mir_surface, sink, seat, initial_size); });
+                                        { resize_handler(mir_surface, sink, seat, initial_size); });
     }
 
     ~WlShellSurface() override
@@ -2128,9 +2127,9 @@ protected:
 
     void set_class(std::string const& /*class_*/) override
     {
-        ARG_TRACE;
     }
 
+private:
     void resize_handler(
         WlSurface* mir_surface,
         std::shared_ptr<SurfaceEventSink> const& sink,
@@ -2169,24 +2168,24 @@ protected:
                     run_unless(
                         destroyed,
                         [resource = resource, height = size.height.as_int(), width = size.width.as_int()]()
-                        {
-                            wl_shell_surface_send_configure(
-                                resource, WL_SHELL_SURFACE_RESIZE_NONE, width, height);
-                        }));
+                            {
+                                wl_shell_surface_send_configure(
+                                    resource, WL_SHELL_SURFACE_RESIZE_NONE, width, height);
+                            }));
             }
         }
 
         mir_surface->set_hide_handler(
             [shell=shell, session, id = surface_id](bool visible)
-            {
-                if (get_surface_for_id(session, id)->visible() == visible)
-                    return;
-                shell::SurfaceSpecification hide_spec;
-                hide_spec.state = visible ? mir_window_state_restored : mir_window_state_hidden;
-                shell->modify_surface(session, id, hide_spec);
-            });
+                {
+                    if (get_surface_for_id(session, id)->visible() == visible)
+                        return;
+                    shell::SurfaceSpecification hide_spec;
+                    hide_spec.state = visible ? mir_window_state_restored : mir_window_state_hidden;
+                    shell->modify_surface(session, id, hide_spec);
+                });
     }
-private:
+
     std::shared_ptr<bool> const destroyed;
     std::shared_ptr<mf::Shell> const shell;
     mf::SurfaceId surface_id;
@@ -2686,9 +2685,9 @@ int halt_eventloop(int fd, uint32_t /*mask*/, void* data)
     if (eventfd_read(fd, &ignored) < 0)
     {
         BOOST_THROW_EXCEPTION((std::system_error{
-            errno,
-            std::system_category(),
-            "Failed to consume pause event notification"}));
+           errno,
+           std::system_category(),
+           "Failed to consume pause event notification"}));
     }
     return 0;
 }
@@ -2750,7 +2749,7 @@ public:
 private:
     WaylandExecutor(wl_event_loop* loop)
         : notify_fd{eventfd(0, EFD_CLOEXEC | EFD_SEMAPHORE | EFD_NONBLOCK)},
-        notify_source{wl_event_loop_add_fd(loop, notify_fd, WL_EVENT_READABLE, &on_notify, this)}
+          notify_source{wl_event_loop_add_fd(loop, notify_fd, WL_EVENT_READABLE, &on_notify, this)}
     {
         if (notify_fd == mir::Fd::invalid)
         {
@@ -2848,8 +2847,8 @@ mf::WaylandConnector::WaylandConnector(
     std::shared_ptr<mf::SessionAuthorizer> const& session_authorizer,
     bool arw_socket)
     : display{wl_display_create(), &cleanup_display},
-    pause_signal{eventfd(0, EFD_CLOEXEC | EFD_SEMAPHORE)},
-    allocator{std::dynamic_pointer_cast<mg::WaylandAllocator>(allocator)}
+      pause_signal{eventfd(0, EFD_CLOEXEC | EFD_SEMAPHORE)},
+      allocator{std::dynamic_pointer_cast<mg::WaylandAllocator>(allocator)}
 {
     if (pause_signal == mir::Fd::invalid)
     {
@@ -2979,15 +2978,15 @@ int mf::WaylandConnector::client_socket_fd() const
         WaylandExecutor::executor_for_event_loop(wl_display_get_event_loop(display.get()))
             ->spawn(
                 [socket = socket_fd[server], display = display.get()]()
+                {
+                    if (!wl_client_create(display, socket))
                     {
-                        if (!wl_client_create(display, socket))
-                        {
-                            mir::log_error(
-                                "Failed to create Wayland client object: %s (errno %i)",
-                                strerror(errno),
-                                errno);
-                        }
-                    });
+                        mir::log_error(
+                            "Failed to create Wayland client object: %s (errno %i)",
+                            strerror(errno),
+                            errno);
+                    }
+                });
     }
 
     if (error)
