@@ -38,4 +38,4 @@ then
     qt_qpa_platform=wayland
 fi
 
-MIR_SOCKET=${mir_socket} WAYLAND_DISPLAY=${wayland_socket} XDG_SESSION_TYPE=mir GDK_BACKEND=mir QT_QPA_PLATFORM=${qt_qpa_platform} SDL_VIDEODRIVER=wayland "$@" ${extras}&
+MIR_SOCKET=${mir_socket} WAYLAND_DISPLAY=${wayland_socket} XDG_SESSION_TYPE=wayland GDK_BACKEND=mir QT_QPA_PLATFORM=${qt_qpa_platform} SDL_VIDEODRIVER=wayland "$@" ${extras}&
