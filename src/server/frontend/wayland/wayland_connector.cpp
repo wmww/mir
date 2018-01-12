@@ -87,34 +87,6 @@ namespace mcl = mir::client;
 namespace mi = mir::input;
 using namespace mir::geometry;
 
-namespace
-{
-struct arg_trace
-{
-    arg_trace(char const* pretty_function, void* self) : pretty_function{pretty_function}, self{self}
-    {
-        printf("**************************** this=%p : entering %s\n", self, pretty_function);
-    }
-
-    ~arg_trace()
-    {
-        printf("**************************** this=%p : exiting  %s\n", self, pretty_function);
-    }
-
-    char const* const pretty_function;
-    void* const self;
-};
-}
-
-#define ARG_MERGE(a,b)  a##b
-#define ARG_LABEL(a) ARG_MERGE(unique_name_, a)
-#define ARG_UNIQUE_NAME ARG_LABEL(__LINE__)
-#define ARG_TRACE arg_trace ARG_UNIQUE_NAME{__PRETTY_FUNCTION__, this}
-
-#define ARG_TRACE_CREATE  printf("**************************** this=%p : %s\n", static_cast<void*>(this), __PRETTY_FUNCTION__)
-#define ARG_TRACE_DESTROY printf("**************************** this=%p : %s\n", static_cast<void*>(this), __PRETTY_FUNCTION__)
-
-
 namespace mir
 {
 namespace frontend
@@ -730,13 +702,11 @@ void WlSurface::frame(uint32_t callback)
 
 void WlSurface::set_opaque_region(const std::experimental::optional<wl_resource*>& region)
 {
-    ARG_TRACE;
     (void)region;
 }
 
 void WlSurface::set_input_region(const std::experimental::optional<wl_resource*>& region)
 {
-    ARG_TRACE;
     (void)region;
 }
 
@@ -865,11 +835,9 @@ protected:
     }
     void add(int32_t /*x*/, int32_t /*y*/, int32_t /*width*/, int32_t /*height*/) override
     {
-        ARG_TRACE;
     }
     void subtract(int32_t /*x*/, int32_t /*y*/, int32_t /*width*/, int32_t /*height*/) override
     {
-        ARG_TRACE;
     }
 
 };
@@ -1982,17 +1950,14 @@ protected:
 
     void move(struct wl_resource* /*seat*/, uint32_t /*serial*/) override
     {
-        ARG_TRACE;
     }
 
     void resize(struct wl_resource* /*seat*/, uint32_t /*serial*/, uint32_t /*edges*/) override
     {
-        ARG_TRACE;
     }
 
     void set_toplevel() override
     {
-        ARG_TRACE;
     }
 
     void set_transient(
@@ -2241,42 +2206,36 @@ struct ZxdgPositionerV6 : wayland::ZxdgPositionerV6
     {
         (void)width, (void)height;
         // TODO
-        ARG_TRACE;
     }
 
     void set_anchor_rect(int32_t x, int32_t y, int32_t width, int32_t height) override
     {
         (void)x, (void)y, (void)width, (void)height;
         // TODO
-        ARG_TRACE;
     }
 
     void set_anchor(uint32_t anchor) override
     {
         (void)anchor;
         // TODO
-        ARG_TRACE;
     }
 
     void set_gravity(uint32_t gravity) override
     {
         (void)gravity;
         // TODO
-        ARG_TRACE;
     }
 
     void set_constraint_adjustment(uint32_t constraint_adjustment) override
     {
         (void)constraint_adjustment;
         // TODO
-        ARG_TRACE;
     }
 
     void set_offset(int32_t x, int32_t y) override
     {
         (void)x, (void)y;
         // TODO
-        ARG_TRACE;
     }
 };
 
@@ -2311,21 +2270,18 @@ struct ZxdgToplevelV6 : wayland::ZxdgToplevelV6
     {
         (void)seat, (void)serial, (void)x, (void)y;
         // TODO
-        ARG_TRACE;
     }
 
     void move(struct wl_resource* seat, uint32_t serial) override
     {
         (void)seat, (void)serial;
         // TODO
-        ARG_TRACE;
     }
 
     void resize(struct wl_resource* seat, uint32_t serial, uint32_t edges) override
     {
         (void)seat, (void)serial, (void)edges;
         // TODO
-        ARG_TRACE;
     }
 
     void set_max_size(int32_t width, int32_t height) override;
@@ -2340,19 +2296,16 @@ struct ZxdgToplevelV6 : wayland::ZxdgToplevelV6
     {
         (void)output;
         // TODO
-        ARG_TRACE;
     }
 
     void unset_fullscreen() override
     {
         // TODO
-        ARG_TRACE;
     }
 
     void set_minimized() override
     {
         // TODO
-        ARG_TRACE;
     }
 
 private:
@@ -2371,7 +2324,6 @@ struct ZxdgPopupV6 : wayland::ZxdgPopupV6
     {
         (void)seat, (void)serial;
         // TODO
-        ARG_TRACE;
     }
 
     void destroy() override
@@ -2464,7 +2416,6 @@ struct ZxdgSurfaceV6 : wayland::ZxdgSurfaceV6
 
     void get_popup(uint32_t id, struct wl_resource* parent, struct wl_resource* positioner) override
     {
-        ARG_TRACE;
         (void)positioner;
         new ZxdgPopupV6{client, parent, id};
     }
@@ -2494,7 +2445,6 @@ struct ZxdgSurfaceV6 : wayland::ZxdgSurfaceV6
 
     void ack_configure(uint32_t serial) override
     {
-        ARG_TRACE;
         (void)serial;
         // TODO
     }
@@ -2767,19 +2717,16 @@ struct DataDevice : wayland::DataDevice
         std::experimental::optional<struct wl_resource*> const& source, struct wl_resource* origin,
         std::experimental::optional<struct wl_resource*> const& icon, uint32_t serial) override
     {
-        ARG_TRACE;
         (void)source, (void)origin, (void)icon, (void)serial;
     }
 
     void set_selection(std::experimental::optional<struct wl_resource*> const& source, uint32_t serial) override
     {
-        ARG_TRACE;
         (void)source, (void)serial;
     }
 
     void release() override
     {
-        ARG_TRACE;
     }
 };
 
@@ -2792,7 +2739,6 @@ struct DataDeviceManager : wayland::DataDeviceManager
 
     void create_data_source(struct wl_client* client, struct wl_resource* resource, uint32_t id) override
     {
-        ARG_TRACE;
         (void)client, (void)resource, (void)id;
     }
 
