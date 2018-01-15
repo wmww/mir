@@ -2051,6 +2051,40 @@ private:
     std::shared_ptr<mf::Shell> const shell;
     WlSeat& seat;
 };
+
+class XdgShellV6 : public wayland::XdgShellV6
+{
+public:
+    XdgShellV6(
+        wl_display* display,
+        std::shared_ptr<mf::Shell> const& shell,
+        WlSeat& seat)
+        : wayland::XdgShellV6(display, 1), // not sure why, but always send 1 as the version
+          shell{shell},
+          seat{seat}
+    {
+    }
+
+    void destroy(struct wl_client* /*client*/, struct wl_resource* /*resource*/) override
+    {
+    }
+
+    void create_positioner(struct wl_client* /*client*/, struct wl_resource* /*resource*/, uint32_t /*id*/) override
+    {
+    }
+
+    void get_xdg_surface(struct wl_client* /*client*/, struct wl_resource* /*resource*/, uint32_t /*id*/, struct wl_resource* /*surface*/) override
+    {
+    }
+
+    void pong(struct wl_client* /*client*/, struct wl_resource* /*resource*/, uint32_t /*serial*/) override
+    {
+    }
+
+private:
+    std::shared_ptr<mf::Shell> const shell;
+    WlSeat& seat;
+};
 }
 }
 
@@ -2263,6 +2297,7 @@ mf::WaylandConnector::WaylandConnector(
         display.get(),
         display_config);
     shell_global = std::make_unique<mf::WlShell>(display.get(), shell, *seat_global);
+    xdg_shell_global = std::make_unique<mf::XdgShellV6>(display.get(), shell, *seat_global);
 
     wl_display_init_shm(display.get());
 
