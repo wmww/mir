@@ -2117,16 +2117,28 @@ public:
     void set_minimized() override
     {
     }
+
+    void send_configure()
+    {
+        wl_array config_array;
+        wl_array_init(&config_array);
+        auto item_ptr = static_cast<zxdg_toplevel_v6_state *>(wl_array_add(&config_array, sizeof(zxdg_toplevel_v6_state)));
+        *item_ptr = ZXDG_TOPLEVEL_V6_STATE_ACTIVATED;
+        zxdg_toplevel_v6_send_configure(resource, 0, 0, &config_array);
+        wl_array_release(&config_array);
+    }
 };
 
 class XdgSurfaceV6 : public wayland::XdgSurfaceV6
 {
 public:
     XdgSurfaceV6(
+        wl_display* display,
         wl_client* client,
         wl_resource* parent,
         uint32_t id)
-        : wayland::XdgSurfaceV6(client, parent, id)
+        : wayland::XdgSurfaceV6(client, parent, id),
+        display{display}
     {
     }
 
@@ -2137,9 +2149,9 @@ public:
 
     void get_toplevel(uint32_t id) override
     {
-        new XdgToplevelV6(client, resource, id);
-        // TODO: send configure to toplevel
-        // TODO: send configure to this surface
+        auto toplevel = new XdgToplevelV6(client, resource, id);
+        toplevel->send_configure();
+        zxdg_surface_v6_send_configure(resource, wl_display_next_serial(display));
     }
 
     void get_popup(uint32_t /*id*/, struct wl_resource* /*parent*/, struct wl_resource* /*positioner*/) override
@@ -2157,6 +2169,8 @@ public:
         // used to know when a client has responded to configure event, not needed for now
     }
 
+private:
+    wl_display* display;
     /*
 public:
     XdgSurfaceV6(
@@ -2378,7 +2392,8 @@ public:
         WlSeat& seat)
         : wayland::XdgShellV6(display, 1), // not sure why, but always send 1 as the version
           shell{shell},
-          seat{seat}
+          seat{seat},
+          display{display}
     {
     }
 
@@ -2394,7 +2409,7 @@ public:
 
     void get_xdg_surface(struct wl_client* client, struct wl_resource* resource, uint32_t id, struct wl_resource* /*surface*/) override
     {
-        new XdgSurfaceV6(client, resource, id);
+        new XdgSurfaceV6(display, client, resource, id);
     }
 
     void pong(struct wl_client* /*client*/, struct wl_resource* /*resource*/, uint32_t /*serial*/) override
@@ -2405,6 +2420,7 @@ public:
 private:
     std::shared_ptr<mf::Shell> const shell;
     WlSeat& seat;
+    wl_display* display;
 };
 }
 }
