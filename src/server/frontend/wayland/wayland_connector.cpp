@@ -2136,10 +2136,57 @@ public:
         wl_display* display,
         wl_client* client,
         wl_resource* parent,
-        uint32_t id)
+        uint32_t id,
+        wl_resource* surface,
+        std::shared_ptr<mf::Shell> const& shell,
+        WlSeat& seat)
         : wayland::XdgSurfaceV6(client, parent, id),
-        display{display}
+          destroyed{std::make_shared<bool>(false)},
+          display{display},
+          shell{shell}
     {
+        auto* tmp = wl_resource_get_user_data(surface);
+        auto& mir_surface = *static_cast<WlSurface*>(tmp);
+
+        auto const session = session_for_client(client);
+
+        auto params = ms::SurfaceCreationParameters()
+            .of_type(mir_window_type_freestyle)
+            .of_size(geom::Size{640, 480})
+            .with_buffer_stream(mir_surface.stream_id);
+
+        auto const sink = std::make_shared<SurfaceEventSink>(&seat, client, surface, resource);
+        surface_id = shell->create_surface(session, params, sink);
+        /*
+        {
+            // The shell isn't guaranteed to respect the requested size
+            auto const window = session->get_surface(surface_id);
+            auto const size = window->client_size();
+            sink->latest_resize(size);
+            seat.spawn(
+                run_unless(
+                    destroyed,
+                    [resource=resource, height = size.height.as_int(), width = size.width.as_int()]()
+                    { wl_shell_surface_send_configure(resource, WL_SHELL_SURFACE_RESIZE_NONE, width, height); }));
+        }
+
+        mir_surface.set_resize_handler(
+            [shell, session, id = surface_id, sink](geom::Size new_size)
+            {
+                sink->latest_resize(new_size);
+                shell::SurfaceSpecification new_size_spec;
+                new_size_spec.width = new_size.width;
+                new_size_spec.height = new_size.height;
+                shell->modify_surface(session, id, new_size_spec);
+            });
+
+        mir_surface.set_hide_handler(
+            [shell, session, id = surface_id]()
+            {
+                shell::SurfaceSpecification hide_spec;
+                hide_spec.state = mir_window_state_hidden;
+                shell->modify_surface(session, id, hide_spec);
+            });*/
     }
 
     void destroy() override
@@ -2170,77 +2217,10 @@ public:
     }
 
 private:
-    wl_display* display;
-    /*
-public:
-    XdgSurfaceV6(
-        wl_client* client,
-        wl_resource* parent,
-        uint32_t id,
-        std::shared_ptr<mir::Executor> const& executor,
-        std::shared_ptr<mg::WaylandAllocator> const& allocator)
-        : Surface(client, parent, id),
-          allocator{allocator},
-          executor{executor},
-          pending_buffer{nullptr},
-          pending_frames{std::make_shared<std::vector<wl_resource*>>()},
-          destroyed{std::make_shared<bool>(false)}
-    {
-        auto session = session_for_client(client);
-        mg::BufferProperties const props{
-            geom::Size{geom::Width{0}, geom::Height{0}},
-            mir_pixel_format_invalid,
-            mg::BufferUsage::undefined
-        };
-
-        stream_id = session->create_buffer_stream(props);
-        stream = session->get_buffer_stream(stream_id);
-
-        // wl_surface is specified to act in mailbox mode
-        stream->allow_framedropping(true);
-    }
-
-    ~WlSurface()
-    {
-        *destroyed = true;
-        if (auto session = session_for_client(client))
-            session->destroy_buffer_stream(stream_id);
-    }
-
-    void set_resize_handler(std::function<void(geom::Size)> const& handler)
-    {
-        resize_handler = handler;
-    }
-
-    void set_hide_handler(std::function<void()> const& handler)
-    {
-        hide_handler = handler;
-    }
-
-    mf::BufferStreamId stream_id;
-    std::shared_ptr<mf::BufferStream> stream;
-private:
-    std::shared_ptr<mg::WaylandAllocator> const allocator;
-    std::shared_ptr<mir::Executor> const executor;
-
-    std::function<void(geom::Size)> resize_handler;
-    std::function<void()> hide_handler;
-
-    wl_resource* pending_buffer;
-    std::shared_ptr<std::vector<wl_resource*>> const pending_frames;
     std::shared_ptr<bool> const destroyed;
-
-    void destroy();
-    void attach(std::experimental::optional<wl_resource*> const& buffer, int32_t x, int32_t y);
-    void damage(int32_t x, int32_t y, int32_t width, int32_t height);
-    void frame(uint32_t callback);
-    void set_opaque_region(std::experimental::optional<wl_resource*> const& region);
-    void set_input_region(std::experimental::optional<wl_resource*> const& region);
-    void commit();
-    void damage_buffer(int32_t x, int32_t y, int32_t width, int32_t height);
-    void set_buffer_transform(int32_t transform);
-    void set_buffer_scale(int32_t scale);
-    */
+    wl_display* display;
+    std::shared_ptr<mf::Shell> const shell;
+    mf::SurfaceId surface_id;
 };
 
 /*
@@ -2407,9 +2387,9 @@ public:
         // TODO
     }
 
-    void get_xdg_surface(struct wl_client* client, struct wl_resource* resource, uint32_t id, struct wl_resource* /*surface*/) override
+    void get_xdg_surface(struct wl_client* client, struct wl_resource* resource, uint32_t id, struct wl_resource* surface) override
     {
-        new XdgSurfaceV6(display, client, resource, id);
+        new XdgSurfaceV6(display, client, resource, id, surface, shell, seat);
     }
 
     void pong(struct wl_client* /*client*/, struct wl_resource* /*resource*/, uint32_t /*serial*/) override
