@@ -2052,6 +2052,250 @@ private:
     WlSeat& seat;
 };
 
+
+class XdgSurfaceV6 : public wayland::XdgSurfaceV6
+{
+public:
+    XdgSurfaceV6(
+        wl_client* client,
+        wl_resource* parent,
+        uint32_t id)
+        : wayland::XdgSurfaceV6(client, parent, id)
+    {
+    }
+
+    void destroy() override
+    {
+    }
+
+    void get_toplevel(uint32_t /*id*/) override
+    {
+    }
+
+    void get_popup(uint32_t /*id*/, struct wl_resource* /*parent*/, struct wl_resource* /*positioner*/) override
+    {
+    }
+
+    void set_window_geometry(int32_t /*x*/, int32_t /*y*/, int32_t /*width*/, int32_t /*height*/) override
+    {
+    }
+
+    void ack_configure(uint32_t /*serial*/) override
+    {
+    }
+
+    /*
+public:
+    XdgSurfaceV6(
+        wl_client* client,
+        wl_resource* parent,
+        uint32_t id,
+        std::shared_ptr<mir::Executor> const& executor,
+        std::shared_ptr<mg::WaylandAllocator> const& allocator)
+        : Surface(client, parent, id),
+          allocator{allocator},
+          executor{executor},
+          pending_buffer{nullptr},
+          pending_frames{std::make_shared<std::vector<wl_resource*>>()},
+          destroyed{std::make_shared<bool>(false)}
+    {
+        auto session = session_for_client(client);
+        mg::BufferProperties const props{
+            geom::Size{geom::Width{0}, geom::Height{0}},
+            mir_pixel_format_invalid,
+            mg::BufferUsage::undefined
+        };
+
+        stream_id = session->create_buffer_stream(props);
+        stream = session->get_buffer_stream(stream_id);
+
+        // wl_surface is specified to act in mailbox mode
+        stream->allow_framedropping(true);
+    }
+
+    ~WlSurface()
+    {
+        *destroyed = true;
+        if (auto session = session_for_client(client))
+            session->destroy_buffer_stream(stream_id);
+    }
+
+    void set_resize_handler(std::function<void(geom::Size)> const& handler)
+    {
+        resize_handler = handler;
+    }
+
+    void set_hide_handler(std::function<void()> const& handler)
+    {
+        hide_handler = handler;
+    }
+
+    mf::BufferStreamId stream_id;
+    std::shared_ptr<mf::BufferStream> stream;
+private:
+    std::shared_ptr<mg::WaylandAllocator> const allocator;
+    std::shared_ptr<mir::Executor> const executor;
+
+    std::function<void(geom::Size)> resize_handler;
+    std::function<void()> hide_handler;
+
+    wl_resource* pending_buffer;
+    std::shared_ptr<std::vector<wl_resource*>> const pending_frames;
+    std::shared_ptr<bool> const destroyed;
+
+    void destroy();
+    void attach(std::experimental::optional<wl_resource*> const& buffer, int32_t x, int32_t y);
+    void damage(int32_t x, int32_t y, int32_t width, int32_t height);
+    void frame(uint32_t callback);
+    void set_opaque_region(std::experimental::optional<wl_resource*> const& region);
+    void set_input_region(std::experimental::optional<wl_resource*> const& region);
+    void commit();
+    void damage_buffer(int32_t x, int32_t y, int32_t width, int32_t height);
+    void set_buffer_transform(int32_t transform);
+    void set_buffer_scale(int32_t scale);
+    */
+};
+
+/*
+void WlSurface::destroy()
+{
+    wl_resource_destroy(resource);
+}
+
+void WlSurface::attach(std::experimental::optional<wl_resource*> const& buffer, int32_t x, int32_t y)
+{
+    if (x != 0 || y != 0)
+    {
+        mir::log_warning("Client requested unimplemented non-zero attach offset. Rendering will be incorrect.");
+    }
+
+    if(!buffer && hide_handler)
+    {
+        hide_handler();
+    }
+
+    pending_buffer = *buffer;
+}
+
+void WlSurface::damage(int32_t x, int32_t y, int32_t width, int32_t height)
+{
+    (void)x;
+    (void)y;
+    (void)width;
+    (void)height;
+}
+
+void WlSurface::damage_buffer(int32_t x, int32_t y, int32_t width, int32_t height)
+{
+    (void)x;
+    (void)y;
+    (void)width;
+    (void)height;
+}
+
+void WlSurface::frame(uint32_t callback)
+{
+    pending_frames->emplace_back(
+        wl_resource_create(client, &wl_callback_interface, 1, callback));
+}
+
+void WlSurface::set_opaque_region(const std::experimental::optional<wl_resource*>& region)
+{
+    (void)region;
+}
+
+void WlSurface::set_input_region(const std::experimental::optional<wl_resource*>& region)
+{
+    (void)region;
+}
+
+void WlSurface::commit()
+{
+    if (pending_buffer)
+    {
+        auto send_frame_notifications =
+            [executor = executor, frames = pending_frames, destroyed = destroyed]()
+            {
+                executor->spawn(run_unless(
+                    destroyed,
+                    [frames]()
+                    {
+                        / *
+                         * There is no synchronisation required here -
+                         * This is run on the WaylandExecutor, and is guaranteed to run on the
+                         * wl_event_loop's thread.
+                         *
+                         * The only other accessors of WlSurface are also on the wl_event_loop,
+                         * so this is guaranteed not to be reentrant.
+                         * /
+                        for (auto frame : *frames)
+                        {
+                            wl_callback_send_done(frame, 0);
+                            wl_resource_destroy(frame);
+                        }
+                        frames->clear();
+                    }));
+            };
+
+        std::shared_ptr<mg::Buffer> mir_buffer;
+
+        if (wl_shm_buffer_get(pending_buffer))
+        {
+            mir_buffer = WlShmBuffer::mir_buffer_from_wl_buffer(
+                pending_buffer,
+                std::move(send_frame_notifications));
+        }
+        else
+        {
+            auto release_buffer = [executor = executor, buffer = pending_buffer, destroyed = destroyed]()
+                {
+                    executor->spawn(run_unless(
+                        destroyed,
+                        [buffer](){ wl_resource_queue_event(buffer, WL_BUFFER_RELEASE); }));
+                };
+
+            if (allocator &&
+                (mir_buffer = allocator->buffer_from_resource(
+                    pending_buffer, std::move(send_frame_notifications), std::move(release_buffer))))
+            {
+            }
+            else
+            {
+                BOOST_THROW_EXCEPTION((std::runtime_error{"Received unhandled buffer type"}));
+            }
+        }
+
+        / *
+         * This is technically incorrect - the resize and submit_buffer *should* be atomic,
+         * but are not, so a client in the process of resizing can have buffers rendered at
+         * an unexpected size.
+         *
+         * It should be good enough for now, though.
+         *
+         * TODO: Provide a mg::Buffer::logical_size() to do this properly.
+         * /
+        stream->resize(mir_buffer->size());
+        if (resize_handler)
+        {
+            resize_handler(mir_buffer->size());
+        }
+        stream->submit_buffer(mir_buffer);
+
+        pending_buffer = nullptr;
+    }
+}
+
+void WlSurface::set_buffer_transform(int32_t transform)
+{
+    (void)transform;
+}
+
+void WlSurface::set_buffer_scale(int32_t scale)
+{
+    (void)scale;
+}
+*/
+
 class XdgShellV6 : public wayland::XdgShellV6
 {
 public:
@@ -2067,18 +2311,22 @@ public:
 
     void destroy(struct wl_client* /*client*/, struct wl_resource* /*resource*/) override
     {
+        // TODO: do we need to destroy this resource somehow?
     }
 
     void create_positioner(struct wl_client* /*client*/, struct wl_resource* /*resource*/, uint32_t /*id*/) override
     {
+        // TODO
     }
 
-    void get_xdg_surface(struct wl_client* /*client*/, struct wl_resource* /*resource*/, uint32_t /*id*/, struct wl_resource* /*surface*/) override
+    void get_xdg_surface(struct wl_client* client, struct wl_resource* resource, uint32_t id, struct wl_resource* /*surface*/) override
     {
+        new XdgSurfaceV6(client, resource, id);
     }
 
     void pong(struct wl_client* /*client*/, struct wl_resource* /*resource*/, uint32_t /*serial*/) override
     {
+        // this is just to test responsiveness, fine to ignore for now
     }
 
 private:
