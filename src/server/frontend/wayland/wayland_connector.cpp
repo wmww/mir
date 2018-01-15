@@ -19,6 +19,7 @@
 #include "wayland_connector.h"
 
 #include "core_generated_interfaces.h"
+#include "xdg_shell_generated_interfaces.h"
 
 #include "mir/frontend/shell.h"
 #include "mir/frontend/surface.h"
