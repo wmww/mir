@@ -2060,6 +2060,8 @@ public:
         uint32_t id)
         : wayland::XdgToplevelV6(client, parent, id)
     {
+        // TODO: it appears an executer is used to run send the events at a later time elsewhere in the code. is this needed here?
+        send_configure();
     }
 
     void destroy() override
@@ -2118,6 +2120,7 @@ public:
     {
     }
 
+private:
     void send_configure()
     {
         wl_array config_array;
@@ -2157,17 +2160,12 @@ public:
 
         auto const sink = std::make_shared<SurfaceEventSink>(&seat, client, surface, resource);
         surface_id = shell->create_surface(session, params, sink);
-        /*
+
         {
             // The shell isn't guaranteed to respect the requested size
             auto const window = session->get_surface(surface_id);
             auto const size = window->client_size();
             sink->latest_resize(size);
-            seat.spawn(
-                run_unless(
-                    destroyed,
-                    [resource=resource, height = size.height.as_int(), width = size.width.as_int()]()
-                    { wl_shell_surface_send_configure(resource, WL_SHELL_SURFACE_RESIZE_NONE, width, height); }));
         }
 
         mir_surface.set_resize_handler(
@@ -2186,7 +2184,7 @@ public:
                 shell::SurfaceSpecification hide_spec;
                 hide_spec.state = mir_window_state_hidden;
                 shell->modify_surface(session, id, hide_spec);
-            });*/
+            });
     }
 
     void destroy() override
@@ -2196,8 +2194,7 @@ public:
 
     void get_toplevel(uint32_t id) override
     {
-        auto toplevel = new XdgToplevelV6(client, resource, id);
-        toplevel->send_configure();
+        new XdgToplevelV6(client, resource, id);
         zxdg_surface_v6_send_configure(resource, wl_display_next_serial(display));
     }
 
@@ -2222,146 +2219,6 @@ private:
     std::shared_ptr<mf::Shell> const shell;
     mf::SurfaceId surface_id;
 };
-
-/*
-void WlSurface::destroy()
-{
-    wl_resource_destroy(resource);
-}
-
-void WlSurface::attach(std::experimental::optional<wl_resource*> const& buffer, int32_t x, int32_t y)
-{
-    if (x != 0 || y != 0)
-    {
-        mir::log_warning("Client requested unimplemented non-zero attach offset. Rendering will be incorrect.");
-    }
-
-    if(!buffer && hide_handler)
-    {
-        hide_handler();
-    }
-
-    pending_buffer = *buffer;
-}
-
-void WlSurface::damage(int32_t x, int32_t y, int32_t width, int32_t height)
-{
-    (void)x;
-    (void)y;
-    (void)width;
-    (void)height;
-}
-
-void WlSurface::damage_buffer(int32_t x, int32_t y, int32_t width, int32_t height)
-{
-    (void)x;
-    (void)y;
-    (void)width;
-    (void)height;
-}
-
-void WlSurface::frame(uint32_t callback)
-{
-    pending_frames->emplace_back(
-        wl_resource_create(client, &wl_callback_interface, 1, callback));
-}
-
-void WlSurface::set_opaque_region(const std::experimental::optional<wl_resource*>& region)
-{
-    (void)region;
-}
-
-void WlSurface::set_input_region(const std::experimental::optional<wl_resource*>& region)
-{
-    (void)region;
-}
-
-void WlSurface::commit()
-{
-    if (pending_buffer)
-    {
-        auto send_frame_notifications =
-            [executor = executor, frames = pending_frames, destroyed = destroyed]()
-            {
-                executor->spawn(run_unless(
-                    destroyed,
-                    [frames]()
-                    {
-                        / *
-                         * There is no synchronisation required here -
-                         * This is run on the WaylandExecutor, and is guaranteed to run on the
-                         * wl_event_loop's thread.
-                         *
-                         * The only other accessors of WlSurface are also on the wl_event_loop,
-                         * so this is guaranteed not to be reentrant.
-                         * /
-                        for (auto frame : *frames)
-                        {
-                            wl_callback_send_done(frame, 0);
-                            wl_resource_destroy(frame);
-                        }
-                        frames->clear();
-                    }));
-            };
-
-        std::shared_ptr<mg::Buffer> mir_buffer;
-
-        if (wl_shm_buffer_get(pending_buffer))
-        {
-            mir_buffer = WlShmBuffer::mir_buffer_from_wl_buffer(
-                pending_buffer,
-                std::move(send_frame_notifications));
-        }
-        else
-        {
-            auto release_buffer = [executor = executor, buffer = pending_buffer, destroyed = destroyed]()
-                {
-                    executor->spawn(run_unless(
-                        destroyed,
-                        [buffer](){ wl_resource_queue_event(buffer, WL_BUFFER_RELEASE); }));
-                };
-
-            if (allocator &&
-                (mir_buffer = allocator->buffer_from_resource(
-                    pending_buffer, std::move(send_frame_notifications), std::move(release_buffer))))
-            {
-            }
-            else
-            {
-                BOOST_THROW_EXCEPTION((std::runtime_error{"Received unhandled buffer type"}));
-            }
-        }
-
-        / *
-         * This is technically incorrect - the resize and submit_buffer *should* be atomic,
-         * but are not, so a client in the process of resizing can have buffers rendered at
-         * an unexpected size.
-         *
-         * It should be good enough for now, though.
-         *
-         * TODO: Provide a mg::Buffer::logical_size() to do this properly.
-         * /
-        stream->resize(mir_buffer->size());
-        if (resize_handler)
-        {
-            resize_handler(mir_buffer->size());
-        }
-        stream->submit_buffer(mir_buffer);
-
-        pending_buffer = nullptr;
-    }
-}
-
-void WlSurface::set_buffer_transform(int32_t transform)
-{
-    (void)transform;
-}
-
-void WlSurface::set_buffer_scale(int32_t scale)
-{
-    (void)scale;
-}
-*/
 
 class XdgShellV6 : public wayland::XdgShellV6
 {
