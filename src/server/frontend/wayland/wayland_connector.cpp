@@ -2052,6 +2052,72 @@ private:
     WlSeat& seat;
 };
 
+class XdgToplevelV6 : public wayland::XdgToplevelV6
+{
+public:
+    XdgToplevelV6(wl_client* client,
+        wl_resource* parent,
+        uint32_t id)
+        : wayland::XdgToplevelV6(client, parent, id)
+    {
+    }
+
+    void destroy() override
+    {
+    }
+
+    void set_parent(std::experimental::optional<struct wl_resource*> const& /*parent*/) override
+    {
+    }
+
+    void set_title(std::string const& /*title*/) override
+    {
+    }
+
+    void set_app_id(std::string const& /*app_id*/) override
+    {
+    }
+
+    void show_window_menu(struct wl_resource* /*seat*/, uint32_t /*serial*/, int32_t /*x*/, int32_t /*y*/) override
+    {
+    }
+
+    void move(struct wl_resource* /*seat*/, uint32_t /*serial*/) override
+    {
+    }
+
+    void resize(struct wl_resource* /*seat*/, uint32_t /*serial*/, uint32_t /*edges*/) override
+    {
+    }
+
+    void set_max_size(int32_t /*width*/, int32_t /*height*/) override
+    {
+    }
+
+    void set_min_size(int32_t /*width*/, int32_t /*height*/) override
+    {
+    }
+
+    void set_maximized() override
+    {
+    }
+
+    void unset_maximized() override
+    {
+    }
+
+    void set_fullscreen(std::experimental::optional<struct wl_resource*> const& /*output*/) override
+    {
+    }
+
+    void unset_fullscreen() override
+    {
+    }
+
+    void set_minimized() override
+    {
+    }
+};
 
 class XdgSurfaceV6 : public wayland::XdgSurfaceV6
 {
@@ -2066,22 +2132,29 @@ public:
 
     void destroy() override
     {
+        // TODO: do we need to destroy something?
     }
 
-    void get_toplevel(uint32_t /*id*/) override
+    void get_toplevel(uint32_t id) override
     {
+        new XdgToplevelV6(client, resource, id);
+        // TODO: send configure to toplevel
+        // TODO: send configure to this surface
     }
 
     void get_popup(uint32_t /*id*/, struct wl_resource* /*parent*/, struct wl_resource* /*positioner*/) override
     {
+        // TODO
     }
 
     void set_window_geometry(int32_t /*x*/, int32_t /*y*/, int32_t /*width*/, int32_t /*height*/) override
     {
+        // TODO
     }
 
     void ack_configure(uint32_t /*serial*/) override
     {
+        // used to know when a client has responded to configure event, not needed for now
     }
 
     /*
