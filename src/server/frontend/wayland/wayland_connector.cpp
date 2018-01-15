@@ -2058,10 +2058,16 @@ public:
     XdgToplevelV6(wl_client* client,
         wl_resource* parent,
         uint32_t id)
-        : wayland::XdgToplevelV6(client, parent, id)
+        : wayland::XdgToplevelV6(client, parent, id),
+          destroyed{std::make_shared<bool>(false)}
     {
         // TODO: it appears an executer is used to run send the events at a later time elsewhere in the code. is this needed here?
         send_configure();
+    }
+
+    ~XdgToplevelV6()
+    {
+        *destroyed = true;
     }
 
     void destroy() override
@@ -2130,6 +2136,8 @@ private:
         zxdg_toplevel_v6_send_configure(resource, 0, 0, &config_array);
         wl_array_release(&config_array);
     }
+
+    std::shared_ptr<bool> const destroyed;
 };
 
 class XdgSurfaceV6 : public wayland::XdgSurfaceV6
@@ -2187,6 +2195,15 @@ public:
             });
     }
 
+    ~XdgSurfaceV6()
+    {
+        *destroyed = true;
+        if (auto session = session_for_client(client))
+        {
+            shell->destroy_surface(session, surface_id);
+        }
+    }
+
     void destroy() override
     {
         // TODO: do we need to destroy something?
@@ -2228,10 +2245,16 @@ public:
         std::shared_ptr<mf::Shell> const& shell,
         WlSeat& seat)
         : wayland::XdgShellV6(display, 1), // not sure why, but always send 1 as the version
+          destroyed{std::make_shared<bool>(false)},
           shell{shell},
           seat{seat},
           display{display}
     {
+    }
+
+    ~XdgShellV6()
+    {
+        *destroyed = true;
     }
 
     void destroy(struct wl_client* /*client*/, struct wl_resource* /*resource*/) override
@@ -2255,6 +2278,7 @@ public:
     }
 
 private:
+    std::shared_ptr<bool> const destroyed;
     std::shared_ptr<mf::Shell> const shell;
     WlSeat& seat;
     wl_display* display;
